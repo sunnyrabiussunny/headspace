@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { format, startOfWeek, addDays, addWeeks, subWeeks, parseISO, isToday, isSameDay } from 'date-fns'
 import toast from 'react-hot-toast'
 import {
@@ -22,6 +22,18 @@ export default function DiaryPage() {
   const [searching, setSearching]           = useState(false)
   const searchTimer                         = useRef(null)
   const navigate                            = useNavigate()
+  const location                            = useLocation()
+
+  // Handle incoming navigation state — e.g. from backlink click with a specific date
+  useEffect(() => {
+    if (location.state?.targetDate) {
+      const target = parseISO(location.state.targetDate)
+      setSelectedDate(target)
+      setWeekStart(startOfWeek(target, { weekStartsOn: 1 }))
+      // Clear state so back-navigation doesn't re-trigger
+      window.history.replaceState({}, '')
+    }
+  }, [location.state])
 
   // Load dot indicators
   useEffect(() => {

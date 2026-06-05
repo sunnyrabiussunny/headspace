@@ -112,3 +112,24 @@
 .blInfo { display: flex; flex-direction: column; gap: 2px; }
 .blDate { font-size: 13px; color: var(--accent-teal); font-weight: 500; }
 .blType { font-size: 11px; color: var(--text-muted); }
+
+/* Backlink enhancements */
+.blIcon {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.blLabel {
+  font-size: 13px;
+  color: var(--accent-teal);
+  font-weight: 500;
+}
+.blPreview {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}

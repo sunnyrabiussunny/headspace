@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getObject, updateObject, deleteObject, getMentions, mentionSearch, createObject } from '../../api'
+import { getObject, updateObject, deleteObject, getMentions, mentionSearch, createObject, getEntriesForDate } from '../../api'
 import MentionPopup from '../diary/MentionPopup'
-import toast from 'react-hot-toast'
 import styles from './ObjectDetailPage.module.css'
 
 const TYPE_META = {
@@ -13,20 +12,21 @@ const TYPE_META = {
 }
 
 export default function ObjectDetailPage() {
-  const { id }                        = useParams()
-  const navigate                      = useNavigate()
-  const [obj, setObj]                 = useState(null)
-  const [title, setTitle]             = useState('')
-  const [notes, setNotes]             = useState('')
-  const [backlinks, setBacklinks]     = useState([])
+  const { id }                            = useParams()
+  const navigate                          = useNavigate()
+  const [obj, setObj]                     = useState(null)
+  const [title, setTitle]                 = useState('')
+  const [notes, setNotes]                 = useState('')
+  const [backlinks, setBacklinks]         = useState([])  // enriched backlink items
   const [mentionQuery, setMentionQuery]   = useState(null)
   const [mentionAnchor, setMentionAnchor] = useState(0)
   const [mentionResults, setMentionResults] = useState([])
-  const saveTimer   = useRef(null)
-  const notesRef    = useRef(null)
-  const mdRef       = useRef('')
-  const mentionMap  = useRef({})
+  const saveTimer  = useRef(null)
+  const notesRef   = useRef(null)
+  const mdRef      = useRef('')
+  const mentionMap = useRef({})
 
+  // Load object
   useEffect(() => {
     getObject(id).then(o => {
       setObj(o)
@@ -36,11 +36,82 @@ export default function ObjectDetailPage() {
       mdRef.current = o.notes || ''
       mentionMap.current = map
     }).catch(() => navigate('/objects'))
-
-    getMentions(id).then(setBacklinks).catch(() => {})
   }, [id])
 
-  // Fetch mention suggestions
+  // Load and enrich backlinks — both diary AND object sources
+  useEffect(() => {
+    getMentions(id).then(async (mentions) => {
+      const enriched = await Promise.all(
+        mentions.map(async (m) => {
+          if (m.source_type === 'diary') {
+            // Find the diary entry to get its date
+            try {
+              // source_id is the entry id — fetch it via search workaround
+              // We store entry id in source_id, so we call the diary endpoint
+              const res = await fetch(`/api/diary/entry/${m.source_id}`)
+              if (res.ok) {
+                const entry = await res.json()
+                return {
+                  id: m.id,
+                  source_type: 'diary',
+                  source_id: m.source_id,
+                  date: entry.date,
+                  label: entry.date,
+                  preview: entry.content
+                    ?.replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1')
+                    ?.slice(0, 100) || '',
+                  created_at: m.created_at,
+                }
+              }
+            } catch { /* fall through */ }
+            // Fallback: use mention created_at date
+            return {
+              id: m.id,
+              source_type: 'diary',
+              source_id: m.source_id,
+              date: m.created_at?.slice(0, 10),
+              label: m.created_at?.slice(0, 10) || 'Diary entry',
+              preview: '',
+              created_at: m.created_at,
+            }
+          } else if (m.source_type === 'object') {
+            // Fetch the source object's title
+            try {
+              const res = await fetch(`/api/objects/${m.source_id}`)
+              if (res.ok) {
+                const sourceObj = await res.json()
+                return {
+                  id: m.id,
+                  source_type: 'object',
+                  source_id: m.source_id,
+                  date: null,
+                  label: sourceObj.title,
+                  objectType: sourceObj.type,
+                  preview: sourceObj.notes
+                    ?.replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1')
+                    ?.slice(0, 100) || '',
+                  created_at: m.created_at,
+                }
+              }
+            } catch { /* fall through */ }
+            return {
+              id: m.id,
+              source_type: 'object',
+              source_id: m.source_id,
+              date: null,
+              label: 'Object',
+              preview: '',
+              created_at: m.created_at,
+            }
+          }
+          return null
+        })
+      )
+      setBacklinks(enriched.filter(Boolean))
+    }).catch(() => {})
+  }, [id])
+
+  // Mention suggestions
   useEffect(() => {
     if (mentionQuery === null) { setMentionResults([]); return }
     mentionSearch(mentionQuery).then(setMentionResults).catch(() => setMentionResults([]))
@@ -59,7 +130,6 @@ export default function ObjectDetailPage() {
     }, 600)
   }, [id])
 
-  // Flush on unmount
   useEffect(() => {
     return () => {
       clearTimeout(saveTimer.current)
@@ -73,7 +143,6 @@ export default function ObjectDetailPage() {
     mdRef.current = displayToMarkdown(value, mentionMap.current)
     triggerSave(title, mdRef.current)
 
-    // Detect @ for mention popup
     const cursor = e.target.selectionStart
     const textBefore = value.slice(0, cursor)
     const atIdx = textBefore.lastIndexOf('@')
@@ -88,18 +157,18 @@ export default function ObjectDetailPage() {
     setMentionQuery(null)
   }, [title, triggerSave])
 
-  const insertMention = useCallback((obj) => {
+  const insertMention = useCallback((selectedObj) => {
     const ta = notesRef.current
     if (!ta) return
     const cursor = ta.selectionStart
     const before = notes.slice(0, mentionAnchor)
     const after  = notes.slice(cursor)
-    const displayMention = `@${obj.title}`
+    const displayMention = `@${selectedObj.title}`
     const newDisplay = before + displayMention + ' ' + after
 
     mentionMap.current = {
       ...mentionMap.current,
-      [mentionAnchor]: { display: obj.title, id: obj.id }
+      [mentionAnchor]: { display: selectedObj.title, id: selectedObj.id }
     }
 
     setNotes(newDisplay)
@@ -109,10 +178,7 @@ export default function ObjectDetailPage() {
     triggerSave(title, mdRef.current)
 
     const newPos = before.length + displayMention.length + 1
-    setTimeout(() => {
-      ta.focus()
-      ta.setSelectionRange(newPos, newPos)
-    }, 0)
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(newPos, newPos) }, 0)
   }, [notes, mentionAnchor, title, triggerSave])
 
   const handleCreateAndInsert = useCallback(async (name, type) => {
@@ -122,9 +188,14 @@ export default function ObjectDetailPage() {
     } catch { /* silent */ }
   }, [insertMention])
 
-  const handleNotesKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') setMentionQuery(null)
-  }, [])
+  const handleBacklinkClick = useCallback((item) => {
+    if (item.source_type === 'diary' && item.date) {
+      // Navigate to diary with the CORRECT date via state
+      navigate('/', { state: { targetDate: item.date } })
+    } else if (item.source_type === 'object') {
+      navigate(`/objects/${item.source_id}`)
+    }
+  }, [navigate])
 
   const handleDelete = async () => {
     if (!window.confirm('Delete this object? This cannot be undone.')) return
@@ -138,7 +209,6 @@ export default function ObjectDetailPage() {
 
   return (
     <div className={styles.page}>
-      {/* Toolbar */}
       <div className={styles.toolbar}>
         <button className={styles.backBtn} onClick={() => navigate('/objects')}>
           <ArrowLeft />
@@ -148,14 +218,12 @@ export default function ObjectDetailPage() {
         </div>
       </div>
 
-      {/* Type badge */}
       <div className={styles.typeRow}>
         <span className={styles.typeBadge} style={{ background: meta.bg, color: meta.color }}>
           {meta.emoji} {obj.type}
         </span>
       </div>
 
-      {/* Title */}
       <input
         className={styles.titleInput}
         value={title}
@@ -163,7 +231,6 @@ export default function ObjectDetailPage() {
         placeholder="Title"
       />
 
-      {/* Tags */}
       {obj.tags?.length > 0 && (
         <div className={styles.tagsRow}>
           <TagIcon />
@@ -173,14 +240,13 @@ export default function ObjectDetailPage() {
 
       <div className={styles.divider} />
 
-      {/* Notes editor with @mention support */}
-      <div style={{ position: 'relative', flex: 1 }}>
+      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
         <textarea
           ref={notesRef}
           className={styles.notesArea}
           value={notes}
           onChange={handleNotesChange}
-          onKeyDown={handleNotesKeyDown}
+          onKeyDown={e => e.key === 'Escape' && setMentionQuery(null)}
           placeholder="Notes... (type @ to link another object)"
         />
         {mentionQuery !== null && (
@@ -194,7 +260,7 @@ export default function ObjectDetailPage() {
         )}
       </div>
 
-      {/* Backlinks */}
+      {/* Backlinks — both diary and object sources */}
       {backlinks.length > 0 && (
         <div className={styles.backlinks}>
           <div className={styles.divider} />
@@ -202,8 +268,27 @@ export default function ObjectDetailPage() {
             <span>Backlinks</span>
             <span className={styles.blCount}>{backlinks.length}</span>
           </div>
-          {backlinks.map(m => (
-            <BacklinkRow key={m.id} mention={m} />
+          {backlinks.map(item => (
+            <button
+              key={item.id}
+              className={styles.blRow}
+              onClick={() => handleBacklinkClick(item)}
+            >
+              <span className={styles.blIcon}>
+                {item.source_type === 'diary' ? <CalIcon /> : <LayersIcon />}
+              </span>
+              <div className={styles.blInfo}>
+                <span className={styles.blLabel}>
+                  {item.source_type === 'diary' ? item.label : item.label}
+                </span>
+                <span className={styles.blType}>
+                  {item.source_type === 'diary' ? 'Diary entry' : `Object — ${item.objectType || ''}`}
+                </span>
+                {item.preview && (
+                  <span className={styles.blPreview}>{item.preview}</span>
+                )}
+              </div>
+            </button>
           ))}
         </div>
       )}
@@ -211,23 +296,7 @@ export default function ObjectDetailPage() {
   )
 }
 
-function BacklinkRow({ mention }) {
-  const navigate = useNavigate()
-  return (
-    <button
-      className={styles.blRow}
-      onClick={() => navigate('/')}
-    >
-      <CalIcon />
-      <div className={styles.blInfo}>
-        <span className={styles.blDate}>{mention.created_at?.slice(0, 10)}</span>
-        <span className={styles.blType}>{mention.source_type === 'diary' ? 'Diary entry' : 'Object notes'}</span>
-      </div>
-    </button>
-  )
-}
-
-// ── Helpers (same as DiaryEditor) ─────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function markdownToDisplay(content) {
   const map = {}
@@ -248,6 +317,8 @@ function displayToMarkdown(display, mentionMap) {
   return result
 }
 
+// ── Icons ─────────────────────────────────────────────────────────────────────
+
 function ArrowLeft() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
 }
@@ -256,4 +327,7 @@ function TagIcon() {
 }
 function CalIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+}
+function LayersIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
 }
