@@ -8,6 +8,7 @@ import uuid
 from database import get_db
 from models.db_models import KnowledgeObject, Mention
 from models.schemas import ObjectCreate, ObjectUpdate, ObjectOut, MentionOut
+from utils.mentions import extract_mentions
 
 router = APIRouter(prefix="/api/objects", tags=["objects"])
 
@@ -51,7 +52,9 @@ async def mention_search(q: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{object_id}", response_model=ObjectOut)
 async def get_object(object_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == object_id))
+    result = await db.execute(
+        select(KnowledgeObject).where(KnowledgeObject.id == object_id)
+    )
     obj = result.scalar_one_or_none()
     if not obj:
         raise HTTPException(404, "Object not found")
@@ -86,12 +89,18 @@ async def create_object(payload: ObjectCreate, db: AsyncSession = Depends(get_db
     db.add(obj)
     await db.commit()
     await db.refresh(obj)
+    # Sync mentions in notes
+    await _sync_mentions(db, obj)
     return obj
 
 
 @router.put("/{object_id}", response_model=ObjectOut)
-async def update_object(object_id: str, payload: ObjectUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == object_id))
+async def update_object(
+    object_id: str, payload: ObjectUpdate, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(KnowledgeObject).where(KnowledgeObject.id == object_id)
+    )
     obj = result.scalar_one_or_none()
     if not obj:
         raise HTTPException(404, "Object not found")
@@ -110,6 +119,8 @@ async def update_object(object_id: str, payload: ObjectUpdate, db: AsyncSession 
 
     await db.commit()
     await db.refresh(obj)
+    # Re-sync mentions whenever notes change
+    await _sync_mentions(db, obj)
     return obj
 
 
@@ -117,5 +128,33 @@ async def update_object(object_id: str, payload: ObjectUpdate, db: AsyncSession 
 async def delete_object(object_id: str, db: AsyncSession = Depends(get_db)):
     await db.execute(delete(Mention).where(Mention.object_id == object_id))
     await db.execute(delete(Mention).where(Mention.source_id == object_id))
-    await db.execute(delete(KnowledgeObject).where(KnowledgeObject.id == object_id))
+    await db.execute(
+        delete(KnowledgeObject).where(KnowledgeObject.id == object_id)
+    )
+    await db.commit()
+
+
+# ── Helper ────────────────────────────────────────────────────────────────────
+
+async def _sync_mentions(db: AsyncSession, obj: KnowledgeObject):
+    """Re-parse @mentions in object notes and update mention records."""
+    # Remove old mentions from this object's notes as source
+    await db.execute(
+        delete(Mention).where(
+            Mention.source_id == obj.id,
+            Mention.source_type == "object"
+        )
+    )
+    # Parse and insert new mentions
+    mentions = extract_mentions(obj.notes or "")
+    for _name, target_id in mentions:
+        # Don't create self-referencing mention
+        if target_id == obj.id:
+            continue
+        db.add(Mention(
+            id=str(uuid.uuid4()),
+            object_id=target_id,
+            source_type="object",
+            source_id=obj.id,
+        ))
     await db.commit()

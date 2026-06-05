@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getObject, updateObject, deleteObject, getMentions, getEntriesForDate } from '../../api'
+import { getObject, updateObject, deleteObject, getMentions, mentionSearch, createObject } from '../../api'
+import MentionPopup from '../diary/MentionPopup'
 import toast from 'react-hot-toast'
 import styles from './ObjectDetailPage.module.css'
 
@@ -12,30 +13,40 @@ const TYPE_META = {
 }
 
 export default function ObjectDetailPage() {
-  const { id }                      = useParams()
-  const navigate                    = useNavigate()
-  const [obj, setObj]               = useState(null)
-  const [title, setTitle]           = useState('')
-  const [notes, setNotes]           = useState('')
-  const [backlinks, setBacklinks]   = useState([])
-  const saveTimer                   = useRef(null)
+  const { id }                        = useParams()
+  const navigate                      = useNavigate()
+  const [obj, setObj]                 = useState(null)
+  const [title, setTitle]             = useState('')
+  const [notes, setNotes]             = useState('')
+  const [backlinks, setBacklinks]     = useState([])
+  const [mentionQuery, setMentionQuery]   = useState(null)
+  const [mentionAnchor, setMentionAnchor] = useState(0)
+  const [mentionResults, setMentionResults] = useState([])
+  const saveTimer   = useRef(null)
+  const notesRef    = useRef(null)
+  const mdRef       = useRef('')
+  const mentionMap  = useRef({})
 
   useEffect(() => {
     getObject(id).then(o => {
-      setObj(o); setTitle(o.title); setNotes(o.notes || '')
+      setObj(o)
+      setTitle(o.title)
+      const { display, map } = markdownToDisplay(o.notes || '')
+      setNotes(display)
+      mdRef.current = o.notes || ''
+      mentionMap.current = map
     }).catch(() => navigate('/objects'))
 
-    getMentions(id).then(mentions => {
-      // Fetch entry previews for each mention
-      const byDate = {}
-      mentions.forEach(m => {
-        if (m.source_type === 'diary') byDate[m.source_id] = m
-      })
-      setBacklinks(mentions.filter(m => m.source_type === 'diary'))
-    }).catch(() => {})
+    getMentions(id).then(setBacklinks).catch(() => {})
   }, [id])
 
-  const save = useCallback((newTitle, newNotes) => {
+  // Fetch mention suggestions
+  useEffect(() => {
+    if (mentionQuery === null) { setMentionResults([]); return }
+    mentionSearch(mentionQuery).then(setMentionResults).catch(() => setMentionResults([]))
+  }, [mentionQuery])
+
+  const triggerSave = useCallback((newTitle, newNotes) => {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
       try {
@@ -47,6 +58,73 @@ export default function ObjectDetailPage() {
       } catch { /* silent */ }
     }, 600)
   }, [id])
+
+  // Flush on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(saveTimer.current)
+      updateObject(id, { title: title.trim() || 'Untitled', notes: mdRef.current }).catch(() => {})
+    }
+  }, [id, title])
+
+  const handleNotesChange = useCallback((e) => {
+    const value = e.target.value
+    setNotes(value)
+    mdRef.current = displayToMarkdown(value, mentionMap.current)
+    triggerSave(title, mdRef.current)
+
+    // Detect @ for mention popup
+    const cursor = e.target.selectionStart
+    const textBefore = value.slice(0, cursor)
+    const atIdx = textBefore.lastIndexOf('@')
+    if (atIdx >= 0) {
+      const fragment = textBefore.slice(atIdx + 1)
+      if (!fragment.includes(' ') && !fragment.includes('\n')) {
+        setMentionAnchor(atIdx)
+        setMentionQuery(fragment)
+        return
+      }
+    }
+    setMentionQuery(null)
+  }, [title, triggerSave])
+
+  const insertMention = useCallback((obj) => {
+    const ta = notesRef.current
+    if (!ta) return
+    const cursor = ta.selectionStart
+    const before = notes.slice(0, mentionAnchor)
+    const after  = notes.slice(cursor)
+    const displayMention = `@${obj.title}`
+    const newDisplay = before + displayMention + ' ' + after
+
+    mentionMap.current = {
+      ...mentionMap.current,
+      [mentionAnchor]: { display: obj.title, id: obj.id }
+    }
+
+    setNotes(newDisplay)
+    mdRef.current = displayToMarkdown(newDisplay, mentionMap.current)
+    setMentionQuery(null)
+    setMentionResults([])
+    triggerSave(title, mdRef.current)
+
+    const newPos = before.length + displayMention.length + 1
+    setTimeout(() => {
+      ta.focus()
+      ta.setSelectionRange(newPos, newPos)
+    }, 0)
+  }, [notes, mentionAnchor, title, triggerSave])
+
+  const handleCreateAndInsert = useCallback(async (name, type) => {
+    try {
+      const newObj = await createObject({ type, title: name })
+      insertMention(newObj)
+    } catch { /* silent */ }
+  }, [insertMention])
+
+  const handleNotesKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') setMentionQuery(null)
+  }, [])
 
   const handleDelete = async () => {
     if (!window.confirm('Delete this object? This cannot be undone.')) return
@@ -72,10 +150,7 @@ export default function ObjectDetailPage() {
 
       {/* Type badge */}
       <div className={styles.typeRow}>
-        <span
-          className={styles.typeBadge}
-          style={{ background: meta.bg, color: meta.color }}
-        >
+        <span className={styles.typeBadge} style={{ background: meta.bg, color: meta.color }}>
           {meta.emoji} {obj.type}
         </span>
       </div>
@@ -84,11 +159,11 @@ export default function ObjectDetailPage() {
       <input
         className={styles.titleInput}
         value={title}
-        onChange={e => { setTitle(e.target.value); save(e.target.value, notes) }}
+        onChange={e => { setTitle(e.target.value); triggerSave(e.target.value, mdRef.current) }}
         placeholder="Title"
       />
 
-      {/* Tags display */}
+      {/* Tags */}
       {obj.tags?.length > 0 && (
         <div className={styles.tagsRow}>
           <TagIcon />
@@ -98,13 +173,26 @@ export default function ObjectDetailPage() {
 
       <div className={styles.divider} />
 
-      {/* Notes editor */}
-      <textarea
-        className={styles.notesArea}
-        value={notes}
-        onChange={e => { setNotes(e.target.value); save(title, e.target.value) }}
-        placeholder="Notes..."
-      />
+      {/* Notes editor with @mention support */}
+      <div style={{ position: 'relative', flex: 1 }}>
+        <textarea
+          ref={notesRef}
+          className={styles.notesArea}
+          value={notes}
+          onChange={handleNotesChange}
+          onKeyDown={handleNotesKeyDown}
+          placeholder="Notes... (type @ to link another object)"
+        />
+        {mentionQuery !== null && (
+          <MentionPopup
+            query={mentionQuery}
+            results={mentionResults}
+            onSelect={insertMention}
+            onCreate={handleCreateAndInsert}
+            onDismiss={() => setMentionQuery(null)}
+          />
+        )}
+      </div>
 
       {/* Backlinks */}
       {backlinks.length > 0 && (
@@ -128,15 +216,36 @@ function BacklinkRow({ mention }) {
   return (
     <button
       className={styles.blRow}
-      onClick={() => navigate('/', { state: { date: mention.source_id } })}
+      onClick={() => navigate('/')}
     >
       <CalIcon />
       <div className={styles.blInfo}>
         <span className={styles.blDate}>{mention.created_at?.slice(0, 10)}</span>
-        <span className={styles.blType}>Diary entry</span>
+        <span className={styles.blType}>{mention.source_type === 'diary' ? 'Diary entry' : 'Object notes'}</span>
       </div>
     </button>
   )
+}
+
+// ── Helpers (same as DiaryEditor) ─────────────────────────────────────────────
+
+function markdownToDisplay(content) {
+  const map = {}
+  const display = content.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (_, name) => `@${name}`)
+  return { display, map }
+}
+
+function displayToMarkdown(display, mentionMap) {
+  let result = display
+  const entries = Object.entries(mentionMap).sort((a, b) => Number(b[0]) - Number(a[0]))
+  for (const [_, { display: name, id }] of entries) {
+    const displayToken = `@${name}`
+    const mdToken = `@[${name}](${id})`
+    if (result.includes(displayToken) && !result.includes(mdToken)) {
+      result = result.replace(displayToken, mdToken)
+    }
+  }
+  return result
 }
 
 function ArrowLeft() {
