@@ -1,0 +1,114 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+.loading {
+  padding: 40px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+.backBtn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  border-radius: 6px;
+}
+.backBtn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.toolbarRight { display: flex; gap: 8px; }
+
+.typeRow {
+  padding: 4px 20px 10px;
+}
+.typeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.titleInput {
+  width: 100%;
+  padding: 4px 20px 10px;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -.3px;
+}
+
+.tagsRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 20px 12px;
+  font-size: 13px;
+  color: var(--accent-teal);
+  font-weight: 500;
+}
+
+.divider { height: 1px; background: var(--divider); }
+
+.notesArea {
+  flex: 1;
+  min-height: 200px;
+  padding: 18px 20px;
+  font-size: 15px;
+  color: var(--text-primary);
+  line-height: 1.65;
+  font-family: var(--font);
+}
+
+/* Backlinks */
+.backlinks {
+  flex-shrink: 0;
+  padding-bottom: 40px;
+}
+.backlinksHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.blCount {
+  width: 22px;
+  height: 22px;
+  background: var(--bg-card);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.blRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 20px;
+  text-align: left;
+  color: var(--text-secondary);
+  transition: background .12s;
+}
+.blRow:hover { background: var(--bg-hover); }
+.blInfo { display: flex; flex-direction: column; gap: 2px; }
+.blDate { font-size: 13px; color: var(--accent-teal); font-weight: 500; }
+.blType { font-size: 11px; color: var(--text-muted); }
