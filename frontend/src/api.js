@@ -36,3 +36,5 @@ export const importBackup       = (file) => {
   form.append('file', file)
   return api.post('/export/import', form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data)
 }
+export const getEntryContext   = (entryId, objectId) =>
+  api.get(`/diary/entry/${entryId}/context`, { params: { object_id: objectId } }).then(r => r.data)

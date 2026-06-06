@@ -108,3 +108,55 @@ async def _sync_mentions(db: AsyncSession, entry: DiaryEntry):
             source_id=entry.id,
         ))
     await db.commit()
+
+
+@router.get("/entry/{entry_id}/context")
+async def get_entry_context(entry_id: str, object_id: str, db: AsyncSession = Depends(get_db)):
+    """Return entry date plus a ~10-word context snippet around the @mention of object_id."""
+    result = await db.execute(select(DiaryEntry).where(DiaryEntry.id == entry_id))
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise HTTPException(404, "Entry not found")
+
+    snippet = _extract_context(entry.content, object_id)
+    return {
+        "id": entry.id,
+        "date": entry.date,
+        "snippet": snippet,
+    }
+
+
+def _extract_context(content: str, object_id: str) -> str:
+    """Find @[Name](object_id) in content, return 5 words before + name + 5 words after."""
+    import re
+    pattern = re.compile(r'@\[([^\]]+)\]\(' + re.escape(object_id) + r'\)')
+    m = pattern.search(content)
+    if not m:
+        # Fallback: first 80 chars stripped of all mention syntax
+        plain = re.sub(r'@\[([^\]]+)\]\([^)]+\)', r'@\1', content)
+        return plain.strip()[:80]
+
+    name = m.group(1)
+    start = m.start()
+    end   = m.end()
+
+    # Grab plain text before and after
+    before_raw = re.sub(r'@\[([^\]]+)\]\([^)]+\)', r'@\1', content[:start]).strip()
+    after_raw  = re.sub(r'@\[([^\]]+)\]\([^)]+\)', r'@\1', content[end:]).strip()
+
+    before_words = before_raw.split()[-5:] if before_raw else []
+    after_words  = after_raw.split()[:5]  if after_raw  else []
+
+    parts = []
+    if before_words:
+        parts.append(' '.join(before_words))
+    parts.append(f'@{name}')
+    if after_words:
+        parts.append(' '.join(after_words))
+
+    snippet = ' '.join(parts)
+    if before_words:
+        snippet = '...' + snippet
+    if after_words:
+        snippet = snippet + '...'
+    return snippet

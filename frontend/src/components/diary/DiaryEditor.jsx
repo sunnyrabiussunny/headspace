@@ -1,26 +1,25 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { updateEntry, mentionSearch, createObject } from '../../api'
+import { useNavigate } from 'react-router-dom'
 import MentionPopup from './MentionPopup'
 import styles from './DiaryEditor.module.css'
 
 export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
-  const [displayText, setDisplayText]     = useState('')
+  const [blocks, setBlocks]               = useState([])   // { type:'text'|'mention', text, id, objectId }
+  const [rawText, setRawText]             = useState('')    // what textarea shows
   const [mentionQuery, setMentionQuery]   = useState(null)
   const [mentionAnchor, setMentionAnchor] = useState(0)
   const [mentionResults, setMentionResults] = useState([])
-  const [popupPos, setPopupPos]           = useState({ top: 0, left: 0 })
   const textareaRef = useRef(null)
   const saveTimer   = useRef(null)
   const mdRef       = useRef(entry.content)
-  // Map of display positions to mention tokens: { anchorPos: { display, id } }
-  const mentionMap  = useRef({})
+  const navigate    = useNavigate()
 
-  // On mount: convert stored markdown to display text
+  // On mount — parse markdown into display text
   useEffect(() => {
-    const { display, map } = markdownToDisplay(entry.content)
-    setDisplayText(display)
+    const display = mdToDisplay(entry.content)
+    setRawText(display)
     mdRef.current = entry.content
-    mentionMap.current = map
     setTimeout(() => {
       if (textareaRef.current) {
         textareaRef.current.focus()
@@ -30,7 +29,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     }, 60)
   }, [entry.id])
 
-  // Fetch mention suggestions whenever query changes
+  // Fetch mention suggestions
   useEffect(() => {
     if (mentionQuery === null) { setMentionResults([]); return }
     mentionSearch(mentionQuery)
@@ -38,7 +37,6 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
       .catch(() => setMentionResults([]))
   }, [mentionQuery])
 
-  // Auto-save 600ms after typing stops
   const triggerSave = useCallback(() => {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
@@ -49,7 +47,6 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     }, 600)
   }, [entry.id, onSave])
 
-  // Flush on unmount
   useEffect(() => {
     return () => {
       clearTimeout(saveTimer.current)
@@ -59,20 +56,21 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
 
   const handleChange = useCallback((e) => {
     const value = e.target.value
-    setDisplayText(value)
-    // Rebuild markdown from display text using mentionMap
-    mdRef.current = displayToMarkdown(value, mentionMap.current)
+    setRawText(value)
+
+    // Rebuild markdown preserving existing @[Name](id) tokens
+    // Strategy: rebuild from scratch using a mention registry built from current mdRef
+    mdRef.current = rebuildMarkdown(value, mdRef.current)
     triggerSave()
 
-    // Detect @ mention
+    // Detect @ for mention popup — use actual cursor position
     const cursor = e.target.selectionStart
     const textBefore = value.slice(0, cursor)
     const atIdx = textBefore.lastIndexOf('@')
 
     if (atIdx >= 0) {
       const fragment = textBefore.slice(atIdx + 1)
-      // Only trigger if no space or newline after @
-      if (!fragment.includes(' ') && !fragment.includes('\n')) {
+      if (!fragment.includes(' ') && !fragment.includes('\n') && fragment.length <= 40) {
         setMentionAnchor(atIdx)
         setMentionQuery(fragment)
         return
@@ -86,30 +84,30 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     if (!ta) return
 
     const cursor = ta.selectionStart
-    const before = displayText.slice(0, mentionAnchor)
-    const after  = displayText.slice(cursor)
-    const displayMention = `@${obj.title}`
-    const newDisplay = before + displayMention + ' ' + after
+    const before = rawText.slice(0, mentionAnchor)
+    const after  = rawText.slice(cursor)
+    // Insert @Name in display, @[Name](id) in markdown
+    const displayToken = `@${obj.title}`
+    const mdToken      = `@[${obj.title}](${obj.id})`
 
-    // Store in mentionMap so we can rebuild markdown later
-    mentionMap.current = {
-      ...mentionMap.current,
-      [mentionAnchor]: { display: obj.title, id: obj.id }
-    }
+    const newDisplay = before + displayToken + ' ' + after
+    const newMd      = mdToDisplay(mdRef.current)
+      // Replace the @query part in markdown with the full token
+    const currentMdBefore = mdRef.current.slice(0, mentionAnchor)
+    const currentMdAfter  = mdRef.current.slice(mentionAnchor + (cursor - mentionAnchor))
+    mdRef.current = currentMdBefore + mdToken + ' ' + currentMdAfter
 
-    setDisplayText(newDisplay)
-    mdRef.current = displayToMarkdown(newDisplay, mentionMap.current)
+    setRawText(newDisplay)
     setMentionQuery(null)
     setMentionResults([])
 
-    // Move cursor to after the inserted mention
-    const newPos = before.length + displayMention.length + 1
+    const newPos = before.length + displayToken.length + 1
     setTimeout(() => {
       ta.focus()
       ta.setSelectionRange(newPos, newPos)
     }, 0)
     triggerSave()
-  }, [displayText, mentionAnchor, triggerSave])
+  }, [rawText, mentionAnchor, triggerSave])
 
   const handleCreateAndInsert = useCallback(async (name, type) => {
     try {
@@ -120,13 +118,13 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Escape') {
-      if (mentionQuery !== null) {
-        setMentionQuery(null)
-      } else {
-        onClose()
-      }
+      if (mentionQuery !== null) setMentionQuery(null)
+      else onClose()
     }
   }, [mentionQuery, onClose])
+
+  // Render the rich preview BELOW the textarea when not editing
+  // Actually: we keep textarea for editing. The mention chips appear in the preview card.
 
   return (
     <div className={styles.editor}>
@@ -144,13 +142,12 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
         <textarea
           ref={textareaRef}
           className={styles.textarea}
-          value={displayText}
+          value={rawText}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder="Start writing... (type @ to link an object)"
           spellCheck
         />
-
         {mentionQuery !== null && (
           <MentionPopup
             query={mentionQuery}
@@ -165,32 +162,29 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   )
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function markdownToDisplay(content) {
-  // Convert @[Name](id) -> @Name, build a position map
-  const map = {}
-  const display = content.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (match, name, id) => {
-    return `@${name}`
-  })
-  return { display, map }
+function mdToDisplay(md) {
+  return md.replace(/@\[([^\]]+)\]\([^)]+\)/g, (_, name) => `@${name}`)
 }
 
-function displayToMarkdown(display, mentionMap) {
-  // Simple approach: replace @Name with @[Name](id) using mentionMap
-  // Walk mentionMap entries sorted by anchor position
-  let result = display
-  const entries = Object.entries(mentionMap).sort((a, b) => Number(b[0]) - Number(a[0]))
-  for (const [_anchor, { display: name, id }] of entries) {
-    // Replace first occurrence of @name that isn't already in markdown form
-    const displayToken = `@${name}`
-    const mdToken = `@[${name}](${id})`
-    // Only replace if not already wrapped
-    if (result.includes(displayToken) && !result.includes(mdToken)) {
-      result = result.replace(displayToken, mdToken)
-    }
+function rebuildMarkdown(displayText, previousMd) {
+  // Extract all known mention tokens from previous markdown
+  const tokens = {}
+  const re = /@\[([^\]]+)\]\(([^)]+)\)/g
+  let m
+  while ((m = re.exec(previousMd)) !== null) {
+    tokens[m[1]] = m[2]  // name -> id
   }
-  return result
+
+  // Replace @Name in display text with @[Name](id) where we have a known mapping
+  return displayText.replace(/@([\w\s\-\.]+)/g, (match, name) => {
+    const trimmed = name.trimEnd()
+    if (tokens[trimmed]) {
+      return `@[${trimmed}](${tokens[trimmed]})` + name.slice(trimmed.length)
+    }
+    return match
+  })
 }
 
 function CheckIcon() {

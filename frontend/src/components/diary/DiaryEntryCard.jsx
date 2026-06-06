@@ -1,16 +1,56 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import styles from './DiaryEntryCard.module.css'
 
-const MENTION_RE = /@\[([^\]]+)\]\([^)]+\)/g
+const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
 
-function renderPreview(content) {
-  if (!content.trim()) return <span style={{ color: 'var(--text-muted)' }}>Tap to write...</span>
-  const plain = content.replace(MENTION_RE, (_, name) => `@${name}`)
-  return plain.slice(0, 300) + (plain.length > 300 ? '…' : '')
+// Render content with @[Name](id) as clickable teal hyperlinks
+function renderRichContent(content, navigate) {
+  if (!content.trim()) {
+    return <span className={styles.empty}>Tap to write...</span>
+  }
+
+  const parts = []
+  let lastIndex = 0
+  let match
+
+  MENTION_RE.lastIndex = 0
+  while ((match = MENTION_RE.exec(content)) !== null) {
+    // Text before this mention
+    if (match.index > lastIndex) {
+      parts.push(
+        <span key={`text-${lastIndex}`}>
+          {content.slice(lastIndex, match.index)}
+        </span>
+      )
+    }
+    // The mention as a clickable link
+    const name = match[1]
+    const id   = match[2]
+    parts.push(
+      <span
+        key={`mention-${id}-${match.index}`}
+        className={styles.mentionLink}
+        onClick={e => { e.stopPropagation(); navigate(`/objects/${id}`) }}
+        title={`Go to ${name}`}
+      >
+        @{name}
+      </span>
+    )
+    lastIndex = match.index + match[0].length
+  }
+
+  // Remaining text
+  if (lastIndex < content.length) {
+    parts.push(<span key={`text-end`}>{content.slice(lastIndex)}</span>)
+  }
+
+  return parts
 }
 
 export default function DiaryEntryCard({ entry, onClick, onDelete }) {
+  const navigate = useNavigate()
   const time = entry.created_at
     ? format(parseISO(entry.created_at), 'h:mm a')
     : ''
@@ -29,7 +69,9 @@ export default function DiaryEntryCard({ entry, onClick, onDelete }) {
           <TrashIcon />
         </button>
       </div>
-      <p className={styles.preview}>{renderPreview(entry.content)}</p>
+      <p className={styles.preview}>
+        {renderRichContent(entry.content, navigate)}
+      </p>
       {entry.tags?.length > 0 && (
         <div className={styles.tags}>
           {entry.tags.map(t => <span key={t} className="tag-pill">#{t}</span>)}

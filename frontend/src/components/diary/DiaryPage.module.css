@@ -5,7 +5,7 @@
   overflow: hidden;
 }
 
-/* ── Search bar ── */
+/* Search bar */
 .searchBar {
   display: flex;
   align-items: center;
@@ -33,7 +33,6 @@
 
 .divider { height: 1px; background: var(--divider); flex-shrink: 0; }
 
-/* ── Content ── */
 .content {
   display: flex;
   flex-direction: column;
@@ -41,16 +40,17 @@
   overflow: hidden;
 }
 
-/* ── Week strip ── */
+/* Week strip */
 .weekNav {
   display: flex;
   align-items: center;
   padding: 8px 4px;
   flex-shrink: 0;
+  gap: 2px;
 }
 .weekBtn {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -70,10 +70,10 @@
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  padding: 6px 8px;
+  padding: 6px 6px;
   border-radius: 8px;
   cursor: pointer;
-  min-width: 40px;
+  min-width: 38px;
   position: relative;
   transition: background .12s;
 }
@@ -101,9 +101,73 @@
   background: var(--accent-teal);
 }
 
-/* ── Date header ── */
+/* Calendar picker */
+.calPickerWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.calPickerBtn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  transition: background .12s, color .12s;
+}
+.calPickerBtn:hover { background: var(--bg-hover); color: var(--accent-teal); }
+
+.calPickerDropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--bg-mention);
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  padding: 14px;
+  z-index: 300;
+  min-width: 220px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  animation: fadeIn .12s ease;
+}
+.calPickerLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+.calPickerForm {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.calPickerInput {
+  flex: 1;
+  padding: 7px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  colorscheme: dark;
+}
+.calPickerInput:focus { outline: 1px solid var(--accent-teal); border-color: var(--accent-teal); }
+.calPickerGo {
+  padding: 7px 14px;
+  background: var(--accent-teal);
+  color: var(--bg-primary);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+.calPickerGo:hover { opacity: .85; }
+
+/* Date header */
 .dateHeader {
-  padding: 4px 20px 10px;
+  padding: 6px 20px 12px;
   flex-shrink: 0;
 }
 .dateRow {
@@ -135,25 +199,8 @@
   color: var(--text-muted);
   margin-left: 4px;
 }
-.tabBar {
-  display: flex;
-  gap: 4px;
-  margin-top: 10px;
-}
-.tabActive {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  background: var(--bg-selected);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
 
-/* ── Entry list ── */
+/* Entry list */
 .entryList {
   flex: 1;
   overflow-y: auto;
@@ -163,7 +210,6 @@
   gap: 8px;
 }
 
-/* Add entry button */
 .addEntryBtn {
   display: flex;
   align-items: center;

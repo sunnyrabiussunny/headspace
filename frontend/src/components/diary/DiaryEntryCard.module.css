@@ -36,15 +36,26 @@
 .preview {
   font-size: 15px;
   color: var(--text-primary);
-  line-height: 1.6;
+  line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
   display: -webkit-box;
-  -webkit-line-clamp: 6;
+  -webkit-line-clamp: 7;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.tags {
-  margin-top: 8px;
+/* Clickable mention hyperlink */
+.mentionLink {
+  color: var(--accent-teal);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: opacity .12s;
 }
+.mentionLink:hover { opacity: .75; }
+
+.empty { color: var(--text-muted); }
+
+.tags { margin-top: 8px; }

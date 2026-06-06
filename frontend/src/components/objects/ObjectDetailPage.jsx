@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getObject, updateObject, deleteObject, getMentions, mentionSearch, createObject, getEntriesForDate } from '../../api'
+import { getObject, updateObject, deleteObject, getMentions, mentionSearch, createObject, getEntryContext } from '../../api'
 import MentionPopup from '../diary/MentionPopup'
 import styles from './ObjectDetailPage.module.css'
 
@@ -44,35 +44,27 @@ export default function ObjectDetailPage() {
       const enriched = await Promise.all(
         mentions.map(async (m) => {
           if (m.source_type === 'diary') {
-            // Find the diary entry to get its date
             try {
-              // source_id is the entry id — fetch it via search workaround
-              // We store entry id in source_id, so we call the diary endpoint
-              const res = await fetch(`/api/diary/entry/${m.source_id}`)
-              if (res.ok) {
-                const entry = await res.json()
-                return {
-                  id: m.id,
-                  source_type: 'diary',
-                  source_id: m.source_id,
-                  date: entry.date,
-                  label: entry.date,
-                  preview: entry.content
-                    ?.replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1')
-                    ?.slice(0, 100) || '',
-                  created_at: m.created_at,
-                }
+              const ctx = await getEntryContext(m.source_id, id)
+              return {
+                id: m.id,
+                source_type: 'diary',
+                source_id: m.source_id,
+                date: ctx.date,
+                label: ctx.date,
+                preview: ctx.snippet || '',
+                created_at: m.created_at,
               }
-            } catch { /* fall through */ }
-            // Fallback: use mention created_at date
-            return {
-              id: m.id,
-              source_type: 'diary',
-              source_id: m.source_id,
-              date: m.created_at?.slice(0, 10),
-              label: m.created_at?.slice(0, 10) || 'Diary entry',
-              preview: '',
-              created_at: m.created_at,
+            } catch {
+              return {
+                id: m.id,
+                source_type: 'diary',
+                source_id: m.source_id,
+                date: m.created_at?.slice(0, 10),
+                label: m.created_at?.slice(0, 10) || '',
+                preview: '',
+                created_at: m.created_at,
+              }
             }
           } else if (m.source_type === 'object') {
             // Fetch the source object's title
@@ -279,10 +271,9 @@ export default function ObjectDetailPage() {
               </span>
               <div className={styles.blInfo}>
                 <span className={styles.blLabel}>
-                  {item.source_type === 'diary' ? item.label : item.label}
-                </span>
-                <span className={styles.blType}>
-                  {item.source_type === 'diary' ? 'Diary entry' : `Object — ${item.objectType || ''}`}
+                  {item.source_type === 'diary'
+                    ? formatBacklinkDate(item.label)
+                    : item.label}
                 </span>
                 {item.preview && (
                   <span className={styles.blPreview}>{item.preview}</span>
@@ -318,6 +309,15 @@ function displayToMarkdown(display, mentionMap) {
 }
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
+
+// Format "2026-06-06" -> "6 June, 2026"
+function formatBacklinkDate(dateStr) {
+  if (!dateStr || dateStr.length < 10) return dateStr
+  try {
+    const d = new Date(dateStr + 'T00:00:00')
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+  } catch { return dateStr }
+}
 
 function ArrowLeft() {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
