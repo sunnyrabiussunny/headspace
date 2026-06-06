@@ -10,7 +10,7 @@ const TYPE_META = {
 
 const ALL_TYPES = ['PERSON', 'PLACE', 'IDEA', 'ORGANIZATION']
 
-export default function MentionPopup({ query, results, onSelect, onCreate, onDismiss }) {
+export default function MentionPopup({ query, results, onSelect, onCreate, onDismiss, above = false }) {
   const [createType, setCreateType] = useState('PERSON')
   const popupRef = useRef(null)
 
@@ -26,7 +26,7 @@ export default function MentionPopup({ query, results, onSelect, onCreate, onDis
   }, [onDismiss])
 
   return (
-    <div className={styles.popup} ref={popupRef}>
+    <div className={styles.popup} ref={popupRef} style={above ? { bottom: "auto", top: "calc(100% + 6px)" } : {}}>
       <div className={styles.header}>
         Search any object or select a type
       </div>

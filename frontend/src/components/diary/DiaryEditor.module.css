@@ -4,7 +4,6 @@
   border: 1px solid var(--accent-teal);
   display: flex;
   flex-direction: column;
-  position: relative;
   animation: fadeIn .12s ease;
 }
 
@@ -12,16 +11,15 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px 0;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--divider);
-  padding-bottom: 8px;
 }
 
 .closeBtn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  gap: 5px;
+  padding: 5px 12px;
   color: var(--accent-teal);
   border-radius: 6px;
   font-size: 13px;
@@ -48,24 +46,82 @@
 }
 .deleteBtn:hover { background: #2a1515; color: #e05252; }
 
+/* Rich editor body: textarea overlaid on rendered div */
+.editorBody {
+  position: relative;
+  min-height: 160px;
+  overflow: hidden;
+}
+
+/* The rich rendered layer — sits behind textarea, same font/size/padding */
+.richLayer {
+  position: absolute;
+  inset: 0;
+  padding: 14px 16px 16px;
+  font-size: 15px;
+  line-height: 1.7;
+  font-family: var(--font);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: none;   /* clicks pass through to textarea */
+  overflow: hidden;
+}
+
+/* Allow mention chips in richLayer to receive clicks */
+.mentionChip {
+  pointer-events: all;
+  color: var(--accent-teal);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: opacity .1s;
+}
+.mentionChip:hover { opacity: .75; }
+
+/* Live @typing highlight */
+.atTyping {
+  color: var(--accent-teal);
+  font-weight: 500;
+}
+
+.ghost {
+  visibility: hidden;
+  font-size: 15px;
+}
+
+/* Transparent textarea on top — captures input, shows no text color */
 .textarea {
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
   min-height: 160px;
   padding: 14px 16px 16px;
   font-size: 15px;
-  color: var(--text-primary);
   line-height: 1.7;
-  resize: none;
-  background: none;
+  font-family: var(--font);
+  color: transparent;          /* text is invisible — richLayer shows it */
+  caret-color: var(--text-primary);  /* but cursor is visible */
+  background: transparent;
   border: none;
   outline: none;
-  font-family: var(--font);
-  display: block;
+  resize: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  z-index: 2;
 }
 
+/* Placeholder only visible when empty */
+.textarea:placeholder-shown { color: transparent; }
+.textarea::placeholder { color: var(--text-muted); }
+
+/* On desktop, taller editor */
 @media (min-width: 769px) {
-  .textarea {
-    min-height: 240px;
-    font-size: 16px;
-  }
+  .editorBody { min-height: 220px; }
+  .textarea { min-height: 220px; font-size: 16px; }
+  .richLayer { font-size: 16px; }
+  .ghost     { font-size: 16px; }
 }

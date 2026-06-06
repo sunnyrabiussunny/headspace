@@ -1,6 +1,6 @@
 # Headspace
 
-Self-hosted personal knowledge management and diary. Runs on your own server. All data is yours — stored as Markdown and JSON files.
+Self-hosted personal knowledge management and object-based note taking diary. Runs on your own server. All data is yours. Data stored locally as Markdown and JSON files.
 
 **Port: 5151**
 
@@ -8,39 +8,14 @@ Self-hosted personal knowledge management and diary. Runs on your own server. Al
 
 ## Features
 
-- Diary with calendar week strip — write multiple entries per day
-- Object system: Person, Place, Idea, Organization
+- Diary with calendar week strip, write multiple entries per day
+- Object-based note taking system: Person, Place, Idea, Organization
 - `@mention` linking with automatic backlinks
 - Full-text search across diary and objects
 - Auto-export every 3 days as Markdown and JSON
 - Import/export backup zip
-- Dark theme, responsive — works on desktop and mobile browser
+- Dark theme, responsive, works on desktop and mobile browser
 - No cloud dependency, no account required
-
----
-
-## Deploying to GitHub
-
-### Step 1 — Fork or push to your GitHub
-
-```bash
-git clone https://github.com/sunnyrabiussunny/headspace.git
-cd headspace
-# Make any changes
-git add .
-git commit -m "Initial setup"
-git push origin main
-```
-
-### Step 2 — On your server, pull and run
-
-```bash
-git clone https://github.com/sunnyrabiussunny/headspace.git
-cd headspace
-sudo bash install.sh
-```
-
-That is it. Headspace starts on port **5151** and runs as a background service that survives reboots.
 
 ---
 
@@ -263,8 +238,8 @@ sudo systemctl status headspace
 
 ## License
 
-MIT. Do whatever you want with it.
+MIT.
 
 ---
 
-*Built by Sunny Rabius Sunny — github.com/sunnyrabiussunny*
+*Built by Sunny Rabius Sunny*
