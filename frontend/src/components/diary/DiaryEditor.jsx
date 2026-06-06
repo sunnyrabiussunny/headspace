@@ -1,223 +1,238 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { updateEntry, mentionSearch, createObject } from '../../api'
 import { useNavigate } from 'react-router-dom'
-import MentionPopup from './MentionPopup'
 import styles from './DiaryEditor.module.css'
 
-// Parse markdown content into a list of segments for rendering
-// Returns: Array of { type: 'text'|'mention', value, objectId?, name? }
-function parseSegments(md) {
-  const segments = []
-  const re = /@\[([^\]]+)\]\(([^)]+)\)/g
-  let last = 0, m
-  while ((m = re.exec(md)) !== null) {
-    if (m.index > last) segments.push({ type: 'text', value: md.slice(last, m.index) })
-    segments.push({ type: 'mention', value: `@${m[1]}`, name: m[1], objectId: m[2] })
+const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
+
+// Parse markdown → segments
+function parseMd(md) {
+  const segs = []
+  let last = 0
+  MENTION_RE.lastIndex = 0
+  let m
+  while ((m = MENTION_RE.exec(md)) !== null) {
+    if (m.index > last) segs.push({ type: 'text', val: md.slice(last, m.index) })
+    segs.push({ type: 'mention', val: m[1], id: m[2] })
     last = m.index + m[0].length
   }
-  if (last < md.length) segments.push({ type: 'text', value: md.slice(last) })
-  return segments
+  if (last < md.length) segs.push({ type: 'text', val: md.slice(last) })
+  return segs
 }
 
-// Convert segment list back to markdown string
-function segmentsToMd(segments) {
-  return segments.map(s =>
-    s.type === 'mention' ? `@[${s.name}](${s.objectId})` : s.value
-  ).join('')
+// Segments → markdown
+function toMd(segs) {
+  return segs.map(s => s.type === 'mention' ? `@[${s.val}](${s.id})` : s.val).join('')
 }
 
-// Convert segment list to plain display string
-function segmentsToDisplay(segments) {
-  return segments.map(s => s.value).join('')
+// Segments → plain display text
+function toDisplay(segs) {
+  return segs.map(s => s.type === 'mention' ? `@${s.val}` : s.val).join('')
 }
 
 export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
-  // segments is the ground truth — markdown structured as typed segments
-  const segmentsRef       = useRef([])
-  const [displayText, setDisplayText] = useState('')
-  const [mentionQuery, setMentionQuery]     = useState(null)
-  const [mentionAnchor, setMentionAnchor]   = useState(0)   // char index in displayText
-  const [mentionResults, setMentionResults] = useState([])
-  const [popupAbove, setPopupAbove]         = useState(false)
+  const segsRef   = useRef([])
+  const [display, setDisplay]           = useState('')
+  const [query, setQuery]               = useState(null)   // null = hidden
+  const [atAnchor, setAtAnchor]         = useState(0)
+  const [results, setResults]           = useState([])
+  const [selectedIdx, setSelectedIdx]   = useState(0)
+  const taRef     = useRef(null)
+  const saveTimer = useRef(null)
+  const navigate  = useNavigate()
 
-  const textareaRef = useRef(null)
-  const wrapRef     = useRef(null)
-  const saveTimer   = useRef(null)
-  const navigate    = useNavigate()
-
-  // ── Mount: parse existing markdown ──────────────────────────────────────
+  // Mount
   useEffect(() => {
-    const segs = parseSegments(entry.content || '')
-    segmentsRef.current = segs
-    setDisplayText(segmentsToDisplay(segs))
+    const segs = parseMd(entry.content || '')
+    segsRef.current = segs
+    const d = toDisplay(segs)
+    setDisplay(d)
     setTimeout(() => {
-      const ta = textareaRef.current
+      const ta = taRef.current
       if (!ta) return
       ta.focus()
-      ta.setSelectionRange(ta.value.length, ta.value.length)
-      adjustPopupPosition()
-    }, 60)
+      ta.setSelectionRange(d.length, d.length)
+    }, 50)
   }, [entry.id])
 
-  // ── Mention search ────────────────────────────────────────────────────────
+  // Fetch suggestions
   useEffect(() => {
-    if (mentionQuery === null) { setMentionResults([]); return }
-    mentionSearch(mentionQuery).then(setMentionResults).catch(() => setMentionResults([]))
-  }, [mentionQuery])
+    if (query === null) { setResults([]); setSelectedIdx(0); return }
+    mentionSearch(query).then(r => { setResults(r); setSelectedIdx(0) }).catch(() => {})
+  }, [query])
 
-  // ── Auto-save ─────────────────────────────────────────────────────────────
-  const triggerSave = useCallback(() => {
+  const save = useCallback(() => {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
       try {
-        const md = segmentsToMd(segmentsRef.current)
-        const saved = await updateEntry(entry.id, { content: md })
+        const saved = await updateEntry(entry.id, { content: toMd(segsRef.current) })
         onSave(saved)
-      } catch { /* silent */ }
-    }, 600)
+      } catch {}
+    }, 500)
   }, [entry.id, onSave])
 
   useEffect(() => {
     return () => {
       clearTimeout(saveTimer.current)
-      const md = segmentsToMd(segmentsRef.current)
-      updateEntry(entry.id, { content: md }).catch(() => {})
+      updateEntry(entry.id, { content: toMd(segsRef.current) }).catch(() => {})
     }
   }, [entry.id])
 
-  // ── Detect popup position relative to viewport ───────────────────────────
-  const adjustPopupPosition = useCallback(() => {
-    const ta = textareaRef.current
-    const wrap = wrapRef.current
-    if (!ta || !wrap) return
-    const rect = wrap.getBoundingClientRect()
-    // If bottom half of screen, show popup above textarea
-    setPopupAbove(rect.top > window.innerHeight / 2)
+  // Reconcile segments when user types
+  const reconcile = useCallback((newDisplay, oldDisplay, oldSegs) => {
+    // Find which @Name tokens still exist in new display, in order
+    const newSegs = []
+    let cursor = 0
+    const used = new Set()
+
+    for (const seg of oldSegs) {
+      if (seg.type !== 'mention') continue
+      const token = `@${seg.val}`
+      const idx = newDisplay.indexOf(token, cursor)
+      if (idx === -1 || used.has(idx)) continue
+      // text before this mention
+      if (idx > cursor) newSegs.push({ type: 'text', val: newDisplay.slice(cursor, idx) })
+      newSegs.push(seg)
+      cursor = idx + token.length
+      used.add(idx)
+    }
+    // remaining
+    if (cursor < newDisplay.length) newSegs.push({ type: 'text', val: newDisplay.slice(cursor) })
+    if (newSegs.length === 0) return newDisplay ? [{ type: 'text', val: newDisplay }] : []
+    return newSegs
   }, [])
 
-  // ── onChange: rebuild segments keeping mention tokens intact ─────────────
   const handleChange = useCallback((e) => {
-    const newDisplay = e.target.value
+    const val = e.target.value
     const cursor = e.target.selectionStart
+    const oldDisplay = toDisplay(segsRef.current)
+    segsRef.current = reconcile(val, oldDisplay, segsRef.current)
+    setDisplay(val)
+    save()
 
-    // Diff old display vs new display to figure out what changed
-    // Strategy: rebuild segments by matching display spans to old segments
-    const oldDisplay = segmentsToDisplay(segmentsRef.current)
-    const newSegs = reconcileSegments(segmentsRef.current, oldDisplay, newDisplay)
-    segmentsRef.current = newSegs
-    setDisplayText(newDisplay)
-    triggerSave()
-
-    // Detect @ for mention popup
-    const textBefore = newDisplay.slice(0, cursor)
-    const atIdx = textBefore.lastIndexOf('@')
+    // Detect @
+    const before = val.slice(0, cursor)
+    const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
-      const fragment = textBefore.slice(atIdx + 1)
-      if (!fragment.includes(' ') && !fragment.includes('\n') && fragment.length <= 50) {
-        setMentionAnchor(atIdx)
-        setMentionQuery(fragment)
-        adjustPopupPosition()
+      const frag = before.slice(atIdx + 1)
+      if (!frag.includes(' ') && !frag.includes('\n') && frag.length <= 60) {
+        setAtAnchor(atIdx)
+        setQuery(frag)
         return
       }
     }
-    setMentionQuery(null)
-  }, [triggerSave, adjustPopupPosition])
+    setQuery(null)
+  }, [reconcile, save])
 
-  // ── Insert mention at @ position ──────────────────────────────────────────
-  const insertMention = useCallback((obj) => {
-    const ta = textareaRef.current
+  const doInsert = useCallback((obj) => {
+    const ta = taRef.current
     if (!ta) return
+    const cursor  = ta.selectionStart
+    const before  = display.slice(0, atAnchor)
+    const after   = display.slice(cursor)
+    const token   = `@${obj.title}`
+    const newDisp = before + token + ' ' + after
 
-    const cursor = ta.selectionStart
-    const before = displayText.slice(0, mentionAnchor)  // text before @
-    const after  = displayText.slice(cursor)             // text after current cursor
+    // Build new segments
+    const beforeSegs = reconcile(before, toDisplay(segsRef.current), segsRef.current)
+    const newSegs = [
+      ...beforeSegs,
+      { type: 'mention', val: obj.title, id: obj.id },
+      { type: 'text', val: ' ' + after }
+    ]
+    segsRef.current = newSegs
+    setDisplay(newDisp)
+    setQuery(null)
+    setResults([])
+    save()
 
-    // Build new segments:
-    // 1. Re-parse the "before" text using existing segments up to mentionAnchor
-    const beforeSegs = reconcileSegments(segmentsRef.current, segmentsToDisplay(segmentsRef.current), before)
-    // 2. Add the new mention segment
-    const mentionSeg = { type: 'mention', value: `@${obj.title}`, name: obj.title, objectId: obj.id }
-    // 3. Parse the "after" text as plain text (no existing mentions expected there)
-    const afterSegs  = after ? [{ type: 'text', value: after }] : []
+    const newPos = before.length + token.length + 1
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(newPos, newPos) }, 0)
+  }, [display, atAnchor, reconcile, save])
 
-    const newSegs = [...beforeSegs, mentionSeg, { type: 'text', value: ' ' }, ...afterSegs]
-    segmentsRef.current = newSegs
-
-    const newDisplay = segmentsToDisplay(newSegs)
-    setDisplayText(newDisplay)
-    setMentionQuery(null)
-    setMentionResults([])
-    triggerSave()
-
-    const newPos = before.length + obj.title.length + 2 // "@" + name + " "
-    setTimeout(() => {
-      ta.focus()
-      ta.setSelectionRange(newPos, newPos)
-    }, 0)
-  }, [displayText, mentionAnchor, triggerSave])
-
-  const handleCreateAndInsert = useCallback(async (name, type) => {
+  const doCreate = useCallback(async (name, type) => {
     try {
       const obj = await createObject({ type, title: name })
-      insertMention(obj)
-    } catch { /* silent */ }
-  }, [insertMention])
+      doInsert(obj)
+    } catch {}
+  }, [doInsert])
 
   const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') {
-      if (mentionQuery !== null) setMentionQuery(null)
-      else onClose()
+    if (query !== null) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIdx(i => Math.min(i + 1, results.length)) }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedIdx(i => Math.max(i - 1, 0)) }
+      else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (selectedIdx < results.length) doInsert(results[selectedIdx])
+        else if (query.trim()) doCreate(query.trim(), 'PERSON')
+      }
+      else if (e.key === 'Escape') setQuery(null)
+      return
     }
-  }, [mentionQuery, onClose])
+    if (e.key === 'Escape') onClose()
+  }, [query, results, selectedIdx, doInsert, doCreate, onClose])
 
-  // ── Render: rich display using contenteditable-like overlay ──────────────
-  // We use a transparent textarea on top of a rendered div.
-  // The div shows colored mentions; the textarea captures input.
-  const rendered = renderSegments(segmentsRef.current, mentionQuery, mentionAnchor, displayText, navigate)
+  // Build rich display spans
+  const richSpans = segsRef.current.map((seg, i) => {
+    if (seg.type === 'mention') {
+      return (
+        <span
+          key={i}
+          className={styles.chip}
+          onMouseDown={e => { e.preventDefault(); navigate(`/objects/${seg.id}`) }}
+        >{seg.val}</span>
+      )
+    }
+    // Highlight any @typing fragment in this text segment
+    if (query !== null) {
+      const token = '@' + query
+      const idx   = seg.val.indexOf(token)
+      if (idx >= 0) {
+        return (
+          <span key={i}>
+            {seg.val.slice(0, idx)}
+            <span className={styles.typing}>{seg.val.slice(idx, idx + token.length)}</span>
+            {seg.val.slice(idx + token.length)}
+          </span>
+        )
+      }
+    }
+    return <span key={i}>{seg.val}</span>
+  })
 
   return (
     <div className={styles.editor}>
-      <div className={styles.editorHeader}>
-        <button className={styles.closeBtn} onClick={onClose}>
-          <CheckIcon /> <span>Done</span>
-        </button>
-        <button className={styles.deleteBtn} onClick={onDelete}>
-          <TrashIcon />
-        </button>
+      <div className={styles.header}>
+        <button className={styles.doneBtn} onClick={onClose}><CheckIcon /> Done</button>
+        <button className={styles.delBtn}  onClick={onDelete}><TrashIcon /></button>
       </div>
 
-      <div className={styles.editorBody} ref={wrapRef}>
-        {/* Rendered rich text behind the textarea */}
-        <div className={styles.richLayer} aria-hidden="true">
-          {rendered}
-          {/* invisible trailing char to keep height */}
-          <span className={styles.ghost}> </span>
+      <div className={styles.body}>
+        {/* Rich rendered layer */}
+        <div className={styles.rich} aria-hidden>
+          {richSpans}<span className={styles.ghost}> </span>
         </div>
 
-        {/* Transparent textarea on top */}
+        {/* Transparent input layer */}
         <textarea
-          ref={textareaRef}
-          className={styles.textarea}
-          value={displayText}
+          ref={taRef}
+          className={styles.ta}
+          value={display}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          onScroll={e => {
-            // Sync scroll between textarea and rich layer
-            const overlay = e.target.previousSibling
-            if (overlay) overlay.scrollTop = e.target.scrollTop
-          }}
-          placeholder="Start writing... (type @ to link an object)"
+          placeholder="Start writing... (type @ to link)"
           spellCheck={false}
         />
 
-        {mentionQuery !== null && (
-          <MentionPopup
-            query={mentionQuery}
-            results={mentionResults}
-            onSelect={insertMention}
-            onCreate={handleCreateAndInsert}
-            onDismiss={() => setMentionQuery(null)}
-            above={popupAbove}
+        {/* Mention popup */}
+        {query !== null && (
+          <MentionDropdown
+            query={query}
+            results={results}
+            selectedIdx={selectedIdx}
+            onSelect={doInsert}
+            onCreate={doCreate}
+            onHover={setSelectedIdx}
           />
         )}
       </div>
@@ -225,109 +240,40 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   )
 }
 
-// ── Rich renderer ─────────────────────────────────────────────────────────────
-function renderSegments(segments, mentionQuery, mentionAnchor, displayText, navigate) {
-  const parts = []
+// ── Inline MentionDropdown (no separate file needed) ──────────────────────────
+const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢' }
 
-  // If user is currently typing @query, highlight it live in the plain text segment
-  let activeQueryHighlight = mentionQuery !== null ? {
-    start: mentionAnchor,
-    end: mentionAnchor + 1 + (mentionQuery?.length || 0),
-  } : null
-
-  let charPos = 0
-  segments.forEach((seg, i) => {
-    if (seg.type === 'mention') {
-      parts.push(
-        <span
-          key={`m-${i}`}
-          className={styles.mentionChip}
-          onClick={() => navigate(`/objects/${seg.objectId}`)}
+function MentionDropdown({ query, results, selectedIdx, onSelect, onCreate, onHover }) {
+  const ref = useRef(null)
+  return (
+    <div className={styles.popup} ref={ref}>
+      <div className={styles.popupHint}>Search or press Enter to create</div>
+      {results.map((obj, i) => (
+        <div
+          key={obj.id}
+          className={`${styles.popupRow} ${i === selectedIdx ? styles.popupRowActive : ''}`}
+          onMouseEnter={() => onHover(i)}
+          onMouseDown={e => { e.preventDefault(); onSelect(obj) }}
         >
-          {seg.value}
-        </span>
-      )
-      charPos += seg.value.length
-    } else {
-      // Plain text — check if activeQueryHighlight overlaps
-      const segStart = charPos
-      const segEnd   = charPos + seg.value.length
-
-      if (activeQueryHighlight &&
-          activeQueryHighlight.start < segEnd &&
-          activeQueryHighlight.end > segStart) {
-        // Split: before, @query highlight, after
-        const hlStart = Math.max(0, activeQueryHighlight.start - segStart)
-        const hlEnd   = Math.min(seg.value.length, activeQueryHighlight.end - segStart)
-        if (hlStart > 0) parts.push(<span key={`t-${i}-a`}>{seg.value.slice(0, hlStart)}</span>)
-        parts.push(
-          <span key={`t-${i}-hl`} className={styles.atTyping}>
-            {seg.value.slice(hlStart, hlEnd)}
-          </span>
-        )
-        if (hlEnd < seg.value.length) parts.push(<span key={`t-${i}-b`}>{seg.value.slice(hlEnd)}</span>)
-      } else {
-        parts.push(<span key={`t-${i}`}>{seg.value}</span>)
-      }
-      charPos += seg.value.length
-    }
-  })
-
-  return parts
+          <span className={styles.popupEmoji}>{TYPE_EMOJI[obj.type] || '📄'}</span>
+          <span className={styles.popupTitle}>{obj.title}</span>
+          <span className={styles.popupType}>{obj.type}</span>
+        </div>
+      ))}
+      {query.trim() && (
+        <div
+          className={`${styles.popupRow} ${styles.popupCreate} ${selectedIdx === results.length ? styles.popupRowActive : ''}`}
+          onMouseEnter={() => onHover(results.length)}
+          onMouseDown={e => { e.preventDefault(); onCreate(query.trim(), 'PERSON') }}
+        >
+          <span className={styles.popupEmoji}>＋</span>
+          <span className={styles.popupTitle}>Create "{query.trim()}"</span>
+          <span className={styles.popupType}>new object</span>
+        </div>
+      )}
+    </div>
+  )
 }
 
-// ── Segment reconciler ────────────────────────────────────────────────────────
-// Given old segments, old display string, and new display string,
-// produce new segments preserving existing mention tokens.
-function reconcileSegments(oldSegs, oldDisplay, newDisplay) {
-  // Build a map: mention display position -> mention segment
-  // from old display
-  const mentionRanges = []
-  let pos = 0
-  for (const seg of oldSegs) {
-    if (seg.type === 'mention') {
-      mentionRanges.push({ start: pos, end: pos + seg.value.length, seg })
-    }
-    pos += seg.value.length
-  }
-
-  // Find which mention tokens still exist verbatim in the new display
-  // by searching for each mention's display string
-  const newSegs = []
-  let cursor = 0
-  const usedMentions = new Set()
-
-  // Simple approach: scan new display for known @Name tokens in order
-  for (const mr of mentionRanges) {
-    const token = mr.seg.value  // e.g. "@Riyan Hoq"
-    const idx   = newDisplay.indexOf(token, cursor)
-    if (idx === -1 || usedMentions.has(mr.seg.objectId + idx)) continue
-
-    // Text before this mention
-    if (idx > cursor) {
-      newSegs.push({ type: 'text', value: newDisplay.slice(cursor, idx) })
-    }
-    newSegs.push(mr.seg)
-    cursor = idx + token.length
-    usedMentions.add(mr.seg.objectId + idx)
-  }
-
-  // Remaining text after all mentions
-  if (cursor < newDisplay.length) {
-    newSegs.push({ type: 'text', value: newDisplay.slice(cursor) })
-  }
-
-  // If nothing matched (e.g. fresh entry with no old mentions), return plain text
-  if (newSegs.length === 0) {
-    return newDisplay ? [{ type: 'text', value: newDisplay }] : []
-  }
-
-  return newSegs
-}
-
-function CheckIcon() {
-  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-}
-function TrashIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-}
+function CheckIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> }
+function TrashIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg> }
