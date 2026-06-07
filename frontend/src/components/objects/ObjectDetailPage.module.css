@@ -10,55 +10,44 @@
   color: var(--text-secondary); border-radius: 6px; border: none; background: none; cursor: pointer;
 }
 .backBtn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.delBtn {
+  padding: 6px 14px; background: #3a1515; color: #e05252;
+  border-radius: 6px; font-size: 13px; font-weight: 500;
+  border: none; cursor: pointer;
+}
+.delBtn:hover { background: #4a1515; }
 
 .typeRow { padding: 4px 20px 10px; }
 .typeBadge {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 3px 10px; border-radius: 6px; font-size: 13px; font-weight: 500;
 }
+
 .titleInput {
   width: 100%; padding: 4px 20px 10px;
   font-size: 26px; font-weight: 700; color: var(--text-primary);
   background: none; border: none; outline: none; letter-spacing: -.3px;
+  font-family: var(--font);
 }
+
 .tagsRow {
   display: flex; align-items: center; gap: 6px;
   padding: 0 20px 12px; font-size: 13px; color: var(--accent-teal); font-weight: 500;
 }
 .divider { height: 1px; background: var(--divider); }
 
-/* Notes editor — overlay technique */
-.notesWrap {
-  position: relative;
+/* Notes area — plain textarea, no overlay */
+.notesWrap { position: relative; flex: 1; min-height: 200px; }
+
+.notesTa {
+  width: 100%;
   min-height: 200px;
-  flex: 1;
-}
-.notesRich {
-  position: absolute; inset: 0;
+  height: 100%;
   padding: 16px 20px 40px;
   font-size: 15px; line-height: 1.72; font-family: var(--font);
   color: var(--text-primary);
-  white-space: pre-wrap; word-break: break-word;
-  pointer-events: none; user-select: none; overflow: hidden;
-}
-.placeholder { color: var(--text-muted); }
-.ghost { visibility: hidden; }
-
-.chip {
-  color: var(--accent-teal); font-weight: 600;
-  text-decoration: underline; text-underline-offset: 2px;
-  cursor: pointer; pointer-events: all; border-radius: 3px;
-}
-.chip:hover { opacity: .75; }
-.typing { color: var(--accent-teal); font-weight: 500; }
-
-.notesTa {
-  position: absolute; inset: 0; width: 100%; height: 100%; min-height: 200px;
-  padding: 16px 20px 40px;
-  font-size: 15px; line-height: 1.72; font-family: var(--font);
-  color: transparent; caret-color: var(--text-primary);
   background: transparent; border: none; outline: none; resize: none;
-  white-space: pre-wrap; word-break: break-word; z-index: 2;
+  display: block;
 }
 .notesTa::placeholder { color: var(--text-muted); }
 
@@ -69,16 +58,18 @@
   box-shadow: 0 8px 32px rgba(0,0,0,.6); z-index: 999;
   max-height: 260px; overflow-y: auto;
 }
-.popupHint { padding: 8px 14px 4px; font-size: 11px; color: var(--text-muted); border-bottom: 1px solid #2a2a2a; }
+.popupHint {
+  padding: 8px 14px 4px; font-size: 11px; color: var(--text-muted);
+  border-bottom: 1px solid #2a2a2a;
+}
 .popupRow {
   display: flex; align-items: center; gap: 10px; padding: 10px 14px;
-  cursor: pointer; transition: background .1s;
+  cursor: pointer; transition: background .1s; font-size: 14px;
 }
 .popupRow:hover, .active { background: var(--bg-hover); }
-.popupEmoji { font-size: 16px; flex-shrink: 0; width: 22px; text-align: center; }
-.popupTitle { flex: 1; font-size: 14px; color: var(--text-primary); }
+.popupTitle { flex: 1; color: var(--text-primary); }
 .popupType  { font-size: 11px; color: var(--text-muted); }
-.createRow { border-top: 1px solid #2a2a2a; }
+.createRow  { border-top: 1px solid #2a2a2a; }
 .createRow .popupTitle { color: var(--accent-teal); }
 
 /* Backlinks */
@@ -94,11 +85,11 @@
 }
 .blRow {
   display: flex; align-items: flex-start; gap: 10px; width: 100%;
-  padding: 10px 20px; text-align: left; color: var(--text-secondary);
-  background: none; border: none; cursor: pointer; transition: background .12s;
+  padding: 10px 20px; text-align: left; background: none; border: none;
+  cursor: pointer; transition: background .12s;
 }
 .blRow:hover { background: var(--bg-hover); }
 .blIcon { display: flex; align-items: center; color: var(--text-muted); flex-shrink: 0; margin-top: 2px; }
 .blInfo { display: flex; flex-direction: column; gap: 3px; }
 .blLabel { font-size: 13px; color: var(--accent-teal); font-weight: 500; }
-.blSnippet { font-size: 12px; color: var(--text-muted); line-height: 1.4; text-align: left; }
+.blSnippet { font-size: 12px; color: var(--text-muted); line-height: 1.4; }

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { updateEntry, mentionSearch, createObject } from '../../api'
-import { useNavigate } from 'react-router-dom'
 import styles from './DiaryEditor.module.css'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
+const TYPE_EMOJI = { PERSON: '👤', PLACE: '📍', IDEA: '💡', ORGANIZATION: '🏢' }
 
 function parseMd(md) {
   const segs = []
@@ -28,7 +28,6 @@ function toDisplay(segs) {
 }
 
 function reconcile(oldSegs, newDisplay) {
-  // Keep existing mention tokens if they still appear verbatim in newDisplay
   const newSegs = []
   let cursor = 0
   for (const seg of oldSegs) {
@@ -41,43 +40,31 @@ function reconcile(oldSegs, newDisplay) {
     cursor = idx + token.length
   }
   if (cursor < newDisplay.length) newSegs.push({ type: 'text', val: newDisplay.slice(cursor) })
-  // If no segments yet (fresh entry or all mentions deleted), return plain text
-  if (newSegs.length === 0) {
-    return newDisplay.length > 0 ? [{ type: 'text', val: newDisplay }] : []
-  }
+  if (newSegs.length === 0) return newDisplay.length > 0 ? [{ type: 'text', val: newDisplay }] : []
   return newSegs
 }
 
-const TYPE_EMOJI = { PERSON: '👤', PLACE: '📍', IDEA: '💡', ORGANIZATION: '🏢' }
-
 export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
-  const segsRef       = useRef([])
-  const displayRef    = useRef('')          // ground truth for display — NOT state
-  const taRef         = useRef(null)
-  const saveTimer     = useRef(null)
-  const navigate      = useNavigate()
-
-  const [, forceRender]       = useState(0)  // only for rich layer redraws
+  const segsRef   = useRef([])
+  const taRef     = useRef(null)
+  const saveTimer = useRef(null)
   const [query, setQuery]     = useState(null)
   const [atAnchor, setAtAnchor] = useState(0)
   const [results, setResults] = useState([])
   const [selIdx, setSelIdx]   = useState(0)
 
-  // Mount — parse existing markdown, set textarea value directly (no state)
+  // Mount — set textarea value directly, no React state
   useEffect(() => {
     const segs = parseMd(entry.content || '')
     segsRef.current = segs
     const d = toDisplay(segs)
-    displayRef.current = d
     if (taRef.current) {
       taRef.current.value = d
       taRef.current.focus()
       taRef.current.setSelectionRange(d.length, d.length)
     }
-    forceRender(n => n + 1)
   }, [entry.id])
 
-  // Mention search
   useEffect(() => {
     if (query === null) { setResults([]); setSelIdx(0); return }
     mentionSearch(query).then(r => { setResults(r); setSelIdx(0) }).catch(() => {})
@@ -100,20 +87,13 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     }
   }, [entry.id])
 
-  // onChange — manipulate textarea value directly, never via React state
   const handleChange = useCallback((e) => {
-    const ta = e.target
+    const ta     = e.target
     const newVal = ta.value
     const cursor = ta.selectionStart
-
-    // Reconcile segments with new display value
     segsRef.current = reconcile(segsRef.current, newVal)
-    displayRef.current = newVal
-    // DO NOT call setDisplay — just trigger rich layer redraw
-    forceRender(n => n + 1)
     save()
 
-    // Detect @
     const before = newVal.slice(0, cursor)
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
@@ -130,31 +110,25 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   const doInsert = useCallback((obj) => {
     const ta = taRef.current
     if (!ta) return
-    const cursor   = ta.selectionStart
-    const curVal   = ta.value
-    const before   = curVal.slice(0, atAnchor)
-    const after    = curVal.slice(cursor)
-    const token    = `@${obj.title}`
-    const newVal   = before + token + ' ' + after
+    const cursor = ta.selectionStart
+    const before = ta.value.slice(0, atAnchor)
+    const after  = ta.value.slice(cursor)
+    const token  = `@${obj.title}`
+    const newVal = before + token + ' ' + after
 
-    // Build new segments
     const beforeSegs = reconcile(segsRef.current, before)
     segsRef.current  = [
       ...beforeSegs,
       { type: 'mention', val: obj.title, id: obj.id },
       { type: 'text', val: ' ' + after }
     ]
-    displayRef.current = newVal
 
-    // Set textarea value directly — preserves cursor control
     ta.value = newVal
     const newPos = before.length + token.length + 1
     ta.setSelectionRange(newPos, newPos)
     ta.focus()
-
     setQuery(null)
     setResults([])
-    forceRender(n => n + 1)
     save()
   }, [atAnchor, save])
 
@@ -164,57 +138,26 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
 
   const handleKeyDown = useCallback((e) => {
     if (query !== null) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setSelIdx(i => Math.min(i + 1, results.length)) }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIdx(i => Math.max(i - 1, 0)) }
+      if (e.key === 'ArrowDown')  { e.preventDefault(); setSelIdx(i => Math.min(i + 1, results.length)) }
+      else if (e.key === 'ArrowUp')   { e.preventDefault(); setSelIdx(i => Math.max(i - 1, 0)) }
       else if (e.key === 'Enter') {
         e.preventDefault()
         if (selIdx < results.length) doInsert(results[selIdx])
         else if (query.trim()) doCreate(query.trim(), 'PERSON')
-      } else if (e.key === 'Escape') setQuery(null)
+      }
+      else if (e.key === 'Escape') setQuery(null)
       return
     }
     if (e.key === 'Escape') onClose()
   }, [query, results, selIdx, doInsert, doCreate, onClose])
 
-  // Build rich spans for overlay
-  const segs = segsRef.current
-  const curDisplay = displayRef.current
-  const richSpans = segs.length > 0
-    ? segs.map((seg, i) => {
-        if (seg.type === 'mention') {
-          return (
-            <span key={i} className={styles.chip}
-              onMouseDown={e => { e.preventDefault(); navigate(`/objects/${seg.id}`) }}>
-              {seg.val}
-            </span>
-          )
-        }
-        // Highlight live @typing in this text segment
-        if (query !== null) {
-          const token = '@' + query
-          const idx   = seg.val.indexOf(token)
-          if (idx >= 0) return (
-            <span key={i}>
-              {seg.val.slice(0, idx)}
-              <span className={styles.typing}>{seg.val.slice(idx, idx + token.length)}</span>
-              {seg.val.slice(idx + token.length)}
-            </span>
-          )
-        }
-        return <span key={i}>{seg.val}</span>
-      })
-    : [<span key="plain">{curDisplay}</span>]
-
   return (
     <div className={styles.editor}>
       <div className={styles.header}>
         <button className={styles.doneBtn} onClick={onClose}><CheckIcon /> Done</button>
-        <button className={styles.delBtn} onClick={onDelete}><TrashIcon /></button>
+        <button className={styles.delBtn}  onClick={onDelete}><TrashIcon /></button>
       </div>
       <div className={styles.body}>
-        <div className={styles.rich} aria-hidden>
-          {richSpans}<span className={styles.ghost}> </span>
-        </div>
         <textarea
           ref={taRef}
           className={styles.ta}
@@ -232,7 +175,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
                 className={`${styles.popupRow} ${i === selIdx ? styles.active : ''}`}
                 onMouseEnter={() => setSelIdx(i)}
                 onMouseDown={e => { e.preventDefault(); doInsert(obj) }}>
-                <span className={styles.popupEmoji}>{TYPE_EMOJI[obj.type] || '📄'}</span>
+                <span>{TYPE_EMOJI[obj.type] || '📄'}</span>
                 <span className={styles.popupTitle}>{obj.title}</span>
                 <span className={styles.popupType}>{obj.type}</span>
               </div>
@@ -242,7 +185,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
                 className={`${styles.popupRow} ${styles.createRow} ${selIdx === results.length ? styles.active : ''}`}
                 onMouseEnter={() => setSelIdx(results.length)}
                 onMouseDown={e => { e.preventDefault(); doCreate(query.trim(), 'PERSON') }}>
-                <span className={styles.popupEmoji}>＋</span>
+                <span>＋</span>
                 <span className={styles.popupTitle}>Create "{query.trim()}"</span>
                 <span className={styles.popupType}>new</span>
               </div>
