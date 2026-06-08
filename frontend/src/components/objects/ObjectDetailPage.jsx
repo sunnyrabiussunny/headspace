@@ -65,12 +65,13 @@ export default function ObjectDetailPage() {
   const [backlinks, setBacklinks] = useState([])
   const segsRef    = useRef([])
   const taRef      = useRef(null)
+  const anchorRef  = useRef(0)   // always-fresh anchor, never stale
   const saveTimer  = useRef(null)
   const titleTimer = useRef(null)
   const [query, setQuery]       = useState(null)
-  const [atAnchor, setAtAnchor] = useState(0)
   const [results, setResults]   = useState([])
   const [selIdx, setSelIdx]     = useState(0)
+  const [createType, setCreateType] = useState('PERSON')
 
   useEffect(() => {
     getObject(id).then(o => {
@@ -144,8 +145,9 @@ export default function ObjectDetailPage() {
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
       const frag = before.slice(atIdx + 1)
-      if (!frag.includes(' ') && !frag.includes('\n') && frag.length <= 60) {
-        setAtAnchor(atIdx)
+      // Keep popup open on spaces — names like "Riyan Hoq" need spaces
+      if (!frag.includes('\n')) {
+        anchorRef.current = atIdx
         setQuery(frag)
         return
       }
@@ -156,8 +158,9 @@ export default function ObjectDetailPage() {
   const doInsert = useCallback((selObj) => {
     const ta = taRef.current
     if (!ta) return
+    const anchor = anchorRef.current
     const cursor = ta.selectionStart
-    const before = ta.value.slice(0, atAnchor)
+    const before = ta.value.slice(0, anchor)
     const after  = ta.value.slice(cursor)
     const token  = `@${selObj.title}`
     const newVal = before + token + ' ' + after
@@ -170,16 +173,17 @@ export default function ObjectDetailPage() {
     ]
 
     ta.value = newVal
-    const newPos = before.length + token.length + 1
+    const newPos = anchor + token.length + 1
     ta.setSelectionRange(newPos, newPos)
     ta.focus()
     setQuery(null)
     setResults([])
     saveNotes()
-  }, [atAnchor, saveNotes])
+  }, [saveNotes])
 
   const doCreate = useCallback(async (name, type) => {
-    try { doInsert(await createObject({ type, title: name })) } catch {}
+    if (!name.trim()) return
+    try { doInsert(await createObject({ type, title: name.trim() })) } catch {}
   }, [doInsert])
 
   const handleKeyDown = useCallback((e) => {
@@ -251,24 +255,39 @@ export default function ObjectDetailPage() {
         {query !== null && (
           <div className={styles.popup}>
             <div className={styles.popupHint}>↑↓ navigate · Enter select · Esc close</div>
+            {results.length === 0 && query.length > 0 && (
+              <div className={styles.popupEmpty}>No objects match "{query}"</div>
+            )}
             {results.map((o, i) => (
               <div key={o.id}
                 className={`${styles.popupRow} ${i === selIdx ? styles.active : ''}`}
                 onMouseEnter={() => setSelIdx(i)}
                 onMouseDown={e => { e.preventDefault(); doInsert(o) }}>
-                <span>{TYPE_EMOJI[o.type] || '📄'}</span>
+                <span className={styles.popupEmoji}>{TYPE_EMOJI[o.type] || '📄'}</span>
                 <span className={styles.popupTitle}>{o.title}</span>
                 <span className={styles.popupType}>{o.type}</span>
               </div>
             ))}
-            {query.trim() && (
-              <div
-                className={`${styles.popupRow} ${styles.createRow} ${selIdx === results.length ? styles.active : ''}`}
-                onMouseEnter={() => setSelIdx(results.length)}
-                onMouseDown={e => { e.preventDefault(); doCreate(query.trim(), 'PERSON') }}>
-                <span>＋</span>
-                <span className={styles.popupTitle}>Create "{query.trim()}"</span>
-                <span className={styles.popupType}>new</span>
+            {query.trim().length > 0 && (
+              <div className={`${styles.createSection} ${selIdx === results.length ? styles.active : ''}`}
+                onMouseEnter={() => setSelIdx(results.length)}>
+                <div className={styles.createTop}>
+                  <span className={styles.createPlus}>＋</span>
+                  <span className={styles.createLabel}>Create "{query.trim()}" as:</span>
+                </div>
+                <div className={styles.typeRow}>
+                  {['PERSON','PLACE','IDEA','ORGANIZATION'].map(t => (
+                    <button key={t}
+                      className={`${styles.typeBtn} ${createType === t ? styles.typeBtnActive : ''}`}
+                      onMouseDown={e => { e.preventDefault(); setCreateType(t) }}>
+                      {TYPE_EMOJI[t]} {t.charAt(0) + t.slice(1).toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+                <button className={styles.createConfirm}
+                  onMouseDown={e => { e.preventDefault(); doCreate(query.trim(), createType) }}>
+                  Create and Link
+                </button>
               </div>
             )}
           </div>

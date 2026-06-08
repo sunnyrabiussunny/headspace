@@ -93,3 +93,34 @@
 .blInfo { display: flex; flex-direction: column; gap: 3px; }
 .blLabel { font-size: 13px; color: var(--accent-teal); font-weight: 500; }
 .blSnippet { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+.popupEmpty { padding: 10px 14px; font-size: 13px; color: var(--text-muted); font-style: italic; }
+.popupEmoji { font-size: 16px; flex-shrink: 0; width: 22px; text-align: center; }
+
+.createSection {
+  border-top: 1px solid #2a2a2a;
+  padding: 10px 14px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.createSection.active { background: var(--bg-hover); }
+.createTop { display: flex; align-items: center; gap: 8px; }
+.createPlus { font-size: 16px; color: var(--accent-teal); }
+.createLabel { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+
+.typeRow { display: flex; gap: 6px; flex-wrap: wrap; }
+.typeBtn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500;
+  background: var(--bg-secondary); color: var(--text-secondary);
+  border: 1px solid var(--divider); cursor: pointer; font-family: var(--font);
+  transition: all .12s;
+}
+.typeBtn:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.typeBtnActive { background: rgba(61,191,160,.15); color: var(--accent-teal); border-color: var(--accent-teal); }
+.createConfirm {
+  align-self: flex-start; padding: 6px 16px;
+  background: var(--accent-teal); color: var(--bg-primary);
+  border-radius: 6px; font-size: 13px; font-weight: 600;
+  border: none; cursor: pointer; font-family: var(--font);
+}
+.createConfirm:hover { opacity: .85; }
