@@ -65,7 +65,7 @@ export default function ObjectDetailPage() {
   const [backlinks, setBacklinks] = useState([])
   const segsRef    = useRef([])
   const taRef      = useRef(null)
-  const anchorRef  = useRef(0)   // always-fresh anchor, never stale
+  const anchorRef  = useRef(-1)  // -1 = no active @, set after insert to prevent re-trigger
   const saveTimer  = useRef(null)
   const titleTimer = useRef(null)
   const [query, setQuery]       = useState(null)
@@ -145,8 +145,8 @@ export default function ObjectDetailPage() {
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
       const frag = before.slice(atIdx + 1)
-      // Keep popup open on spaces — names like "Riyan Hoq" need spaces
-      if (!frag.includes('\n')) {
+      const isConsumed = (anchorRef.current !== -1 && atIdx === anchorRef.current)
+      if (!frag.includes('\n') && !isConsumed) {
         anchorRef.current = atIdx
         setQuery(frag)
         return
@@ -176,6 +176,7 @@ export default function ObjectDetailPage() {
     const newPos = anchor + token.length + 1
     ta.setSelectionRange(newPos, newPos)
     ta.focus()
+    anchorRef.current = -1
     setQuery(null)
     setResults([])
     saveNotes()

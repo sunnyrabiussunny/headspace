@@ -45,7 +45,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   const taRef      = useRef(null)
   const saveTimer  = useRef(null)
   // Store anchor in ref — never stale in callbacks
-  const anchorRef  = useRef(0)
+  const anchorRef  = useRef(-1)
 
   const [query,    setQuery]    = useState(null)   // null = popup hidden
   const [results,  setResults]  = useState([])
@@ -99,13 +99,22 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     save()
 
     // Scan backwards from cursor to find @
+    // If we just inserted a mention, skip @ detection for this one keystroke
+    if (justInserted.current) {
+      justInserted.current = false
+      setQuery(null)
+      return
+    }
+
     const before = newVal.slice(0, cursor)
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
       const frag = before.slice(atIdx + 1)
-      // Keep popup open as long as no newline after @ (spaces are OK — names can have spaces)
-      if (!frag.includes('\n')) {
-        anchorRef.current = atIdx   // store in ref — always fresh in doInsert
+      // anchorRef is -1 after a successful insert (consumed).
+      // Only open popup for a NEW @ — one that is different from the consumed anchor.
+      const isConsumed = (anchorRef.current !== -1 && atIdx === anchorRef.current)
+      if (!frag.includes('\n') && !isConsumed) {
+        anchorRef.current = atIdx
         setQuery(frag)
         return
       }
@@ -139,6 +148,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     const newPos = anchor + token.length + 1
     ta.setSelectionRange(newPos, newPos)
     ta.focus()
+    anchorRef.current = -1  // consumed — next keystroke won't reopen popup
     setQuery(null)
     setResults([])
     save()
