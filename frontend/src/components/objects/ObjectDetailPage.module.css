@@ -127,3 +127,5 @@
   border: none; cursor: pointer; font-family: var(--font);
 }
 .createConfirm:hover { opacity: .85; }
+
+.typeRow2 { display: flex; gap: 6px; flex-wrap: wrap; }

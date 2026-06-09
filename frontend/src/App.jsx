@@ -4,12 +4,14 @@ import DiaryPage from './components/diary/DiaryPage'
 import ObjectsPage from './components/objects/ObjectsPage'
 import ObjectDetailPage from './components/objects/ObjectDetailPage'
 import ExportPage from './components/export/ExportPage'
+import GuidePage from './components/guide/GuidePage'
 import styles from './App.module.css'
 
 const NAV_ITEMS = [
-  { to: '/',        label: 'Diary',   icon: CalIcon },
-  { to: '/objects', label: 'Objects', icon: LayersIcon },
-  { to: '/export',  label: 'Export',  icon: DownloadIcon },
+  { to: '/',          label: 'Diary',           icon: CalIcon },
+  { to: '/objects',   label: 'Objects',         icon: LayersIcon },
+  { to: '/export',    label: 'Export',          icon: DownloadIcon },
+  { to: '/guide',     label: 'Getting Started', icon: BookIcon },
 ]
 
 export default function App() {
@@ -35,14 +37,7 @@ export default function App() {
               <span>{label}</span>
             </NavLink>
           ))}
-          <div style={{ height: 1, background: 'var(--divider)', margin: '8px 4px' }} />
-          <button
-            className={styles.navTodayBtn}
-            onClick={() => window.dispatchEvent(new CustomEvent('goto-today'))}
-          >
-            <TodayIcon size={16} />
-            <span>Today</span>
-          </button>
+
         </div>
       </nav>
 
@@ -70,6 +65,7 @@ export default function App() {
           <Route path="/objects"           element={<ObjectsPage />} />
           <Route path="/objects/:id"       element={<ObjectDetailPage />} />
           <Route path="/export"            element={<ExportPage />} />
+          <Route path="/guide"             element={<GuidePage />} />
         </Routes>
       </main>
     </div>
@@ -77,8 +73,12 @@ export default function App() {
 }
 
 /* ── Inline SVG icons (no dep needed) ── */
-function TodayIcon({ size = 16 }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+function BookIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+    </svg>
+  )
 }
 function CalIcon({ size = 20 }) {
   return (

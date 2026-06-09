@@ -107,19 +107,3 @@
   .main { padding-bottom: var(--nav-height); }
 }
 
-.navTodayBtn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  color: var(--accent-teal);
-  font-size: 14px;
-  font-weight: 600;
-  background: rgba(61,191,160,.08);
-  border: none;
-  cursor: pointer;
-  width: 100%;
-  transition: background .15s;
-}
-.navTodayBtn:hover { background: rgba(61,191,160,.18); }

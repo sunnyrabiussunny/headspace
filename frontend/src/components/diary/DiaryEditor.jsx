@@ -3,8 +3,8 @@ import { updateEntry, mentionSearch, createObject } from '../../api'
 import styles from './DiaryEditor.module.css'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
-const TYPE_EMOJI  = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢' }
-const TYPE_NAMES  = ['PERSON','PLACE','IDEA','ORGANIZATION']
+const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢' }
+const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION']
 
 function parseMd(md) {
   const segs = []; let last = 0
@@ -18,10 +18,10 @@ function parseMd(md) {
   return segs
 }
 function toMd(segs) {
-  return segs.map(s => s.type==='mention' ? `@[${s.val}](${s.id})` : s.val).join('')
+  return segs.map(s => s.type === 'mention' ? `@[${s.val}](${s.id})` : s.val).join('')
 }
 function toDisplay(segs) {
-  return segs.map(s => s.type==='mention' ? `@${s.val}` : s.val).join('')
+  return segs.map(s => s.type === 'mention' ? `@${s.val}` : s.val).join('')
 }
 function reconcile(oldSegs, newDisplay) {
   const out = []; let cursor = 0
@@ -41,23 +41,24 @@ function reconcile(oldSegs, newDisplay) {
 }
 
 export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
-  const segsRef    = useRef([])
-  const taRef      = useRef(null)
-  const saveTimer  = useRef(null)
-  // Store anchor in ref — never stale in callbacks
-  const anchorRef  = useRef(-1)
+  const segsRef      = useRef([])
+  const taRef        = useRef(null)
+  const saveTimer    = useRef(null)
+  const anchorRef    = useRef(-1)   // position of current @; -1 = no active mention
+  const skipNextRef  = useRef(false) // true for one onChange after doInsert
 
-  const [query,    setQuery]    = useState(null)   // null = popup hidden
-  const [results,  setResults]  = useState([])
-  const [selIdx,   setSelIdx]   = useState(0)
+  const [query,      setQuery]      = useState(null)
+  const [results,    setResults]    = useState([])
+  const [selIdx,     setSelIdx]     = useState(0)
   const [createType, setCreateType] = useState('PERSON')
 
-  // ── Mount ──────────────────────────────────────────────────────────────
+  // Mount
   useEffect(() => {
     const segs = parseMd(entry.content || '')
     segsRef.current = segs
+    anchorRef.current = -1
+    skipNextRef.current = false
     const d = toDisplay(segs)
-    // Set textarea value directly — never via React state (prevents cursor jump)
     if (taRef.current) {
       taRef.current.value = d
       taRef.current.focus()
@@ -65,14 +66,13 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     }
   }, [entry.id])
 
-  // ── Search ─────────────────────────────────────────────────────────────
+  // Fetch suggestions
   useEffect(() => {
     if (query === null) { setResults([]); setSelIdx(0); return }
-    // Search even for empty string — show all recent objects
     mentionSearch(query).then(r => { setResults(r); setSelIdx(0) }).catch(() => {})
   }, [query])
 
-  // ── Save ───────────────────────────────────────────────────────────────
+  // Save debounced
   const save = useCallback(() => {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
@@ -90,7 +90,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     }
   }, [entry.id])
 
-  // ── onChange ───────────────────────────────────────────────────────────
+  // onChange
   const handleChange = useCallback((e) => {
     const ta     = e.target
     const newVal = ta.value
@@ -98,10 +98,9 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     segsRef.current = reconcile(segsRef.current, newVal)
     save()
 
-    // Scan backwards from cursor to find @
-    // If we just inserted a mention, skip @ detection for this one keystroke
-    if (justInserted.current) {
-      justInserted.current = false
+    // Skip @ detection for one keystroke after an insertion (prevents space re-trigger)
+    if (skipNextRef.current) {
+      skipNextRef.current = false
       setQuery(null)
       return
     }
@@ -110,10 +109,9 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
       const frag = before.slice(atIdx + 1)
-      // anchorRef is -1 after a successful insert (consumed).
-      // Only open popup for a NEW @ — one that is different from the consumed anchor.
-      const isConsumed = (anchorRef.current !== -1 && atIdx === anchorRef.current)
-      if (!frag.includes('\n') && !isConsumed) {
+      // Spaces allowed in query (names like "Riyan Hoq")
+      // But close if there's a newline after @
+      if (!frag.includes('\n')) {
         anchorRef.current = atIdx
         setQuery(frag)
         return
@@ -122,39 +120,38 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     setQuery(null)
   }, [save])
 
-  // ── Insert chosen object ───────────────────────────────────────────────
+  // Insert selected object
   const doInsert = useCallback((obj) => {
     const ta = taRef.current
     if (!ta) return
-
-    // Read anchor from ref — always the correct value
     const anchor = anchorRef.current
+    if (anchor < 0) return
     const cursor = ta.selectionStart
-    const before = ta.value.slice(0, anchor)  // text before @
-    const after  = ta.value.slice(cursor)      // text after current cursor position
+    const before = ta.value.slice(0, anchor)
+    const after  = ta.value.slice(cursor)
     const token  = `@${obj.title}`
     const newVal = before + token + ' ' + after
 
-    // Rebuild segments
     const beforeSegs = reconcile(segsRef.current, before)
-    segsRef.current  = [
+    segsRef.current = [
       ...beforeSegs,
       { type:'mention', val: obj.title, id: obj.id },
-      { type:'text',    val: ' ' + after }
+      { type:'text', val: ' ' + after }
     ]
 
-    // Set textarea directly — no React state
     ta.value = newVal
     const newPos = anchor + token.length + 1
     ta.setSelectionRange(newPos, newPos)
     ta.focus()
-    anchorRef.current = -1  // consumed — next keystroke won't reopen popup
+
+    // Skip next onChange so space after insertion doesn't reopen popup
+    skipNextRef.current = true
+    anchorRef.current   = -1
     setQuery(null)
     setResults([])
     save()
-  }, [save])  // no anchorRef in deps — ref is always current
+  }, [save])
 
-  // ── Create new object then insert ──────────────────────────────────────
   const doCreate = useCallback(async (name, type) => {
     if (!name.trim()) return
     try {
@@ -163,22 +160,16 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     } catch {}
   }, [doInsert])
 
-  // ── Keyboard nav ───────────────────────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
     if (query !== null) {
       if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setSelIdx(i => Math.min(i + 1, results.length))
+        e.preventDefault(); setSelIdx(i => Math.min(i + 1, results.length))
       } else if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setSelIdx(i => Math.max(i - 1, 0))
+        e.preventDefault(); setSelIdx(i => Math.max(i - 1, 0))
       } else if (e.key === 'Enter') {
         e.preventDefault()
-        if (selIdx < results.length) {
-          doInsert(results[selIdx])
-        } else if (query.trim()) {
-          doCreate(query.trim(), createType)
-        }
+        if (selIdx < results.length) doInsert(results[selIdx])
+        else if (query.trim()) doCreate(query.trim(), createType)
       } else if (e.key === 'Escape') {
         setQuery(null)
       }
@@ -193,7 +184,6 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
         <button className={styles.doneBtn} onClick={onClose}><CheckIcon /> Done</button>
         <button className={styles.delBtn}  onClick={onDelete}><TrashIcon /></button>
       </div>
-
       <div className={styles.body}>
         <textarea
           ref={taRef}
@@ -204,34 +194,22 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
           spellCheck={false}
           defaultValue=""
         />
-
-        {/* Popup — BELOW the textarea, not above */}
         {query !== null && (
           <div className={styles.popup}>
-            <div className={styles.popupHint}>
-              ↑↓ navigate · Enter select · Esc close
-            </div>
-
+            <div className={styles.popupHint}>↑↓ navigate · Enter select · Esc close</div>
             {results.length === 0 && query.length > 0 && (
-              <div className={styles.popupEmpty}>
-                No objects match "{query}"
-              </div>
+              <div className={styles.popupEmpty}>No objects match "{query}"</div>
             )}
-
             {results.map((obj, i) => (
-              <div
-                key={obj.id}
+              <div key={obj.id}
                 className={`${styles.popupRow} ${i === selIdx ? styles.active : ''}`}
                 onMouseEnter={() => setSelIdx(i)}
-                onMouseDown={e => { e.preventDefault(); doInsert(obj) }}
-              >
+                onMouseDown={e => { e.preventDefault(); doInsert(obj) }}>
                 <span className={styles.popupEmoji}>{TYPE_EMOJI[obj.type] || '📄'}</span>
                 <span className={styles.popupTitle}>{obj.title}</span>
                 <span className={styles.popupType}>{obj.type}</span>
               </div>
             ))}
-
-            {/* Create row — shows type picker BEFORE creating */}
             {query.trim().length > 0 && (
               <div className={`${styles.createSection} ${selIdx === results.length ? styles.active : ''}`}
                 onMouseEnter={() => setSelIdx(results.length)}>
@@ -241,19 +219,15 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
                 </div>
                 <div className={styles.typeRow}>
                   {TYPE_NAMES.map(t => (
-                    <button
-                      key={t}
+                    <button key={t}
                       className={`${styles.typeBtn} ${createType === t ? styles.typeBtnActive : ''}`}
-                      onMouseDown={e => { e.preventDefault(); setCreateType(t) }}
-                    >
+                      onMouseDown={e => { e.preventDefault(); setCreateType(t) }}>
                       {TYPE_EMOJI[t]} {t.charAt(0) + t.slice(1).toLowerCase()}
                     </button>
                   ))}
                 </div>
-                <button
-                  className={styles.createConfirm}
-                  onMouseDown={e => { e.preventDefault(); doCreate(query.trim(), createType) }}
-                >
+                <button className={styles.createConfirm}
+                  onMouseDown={e => { e.preventDefault(); doCreate(query.trim(), createType) }}>
                   Create and Link
                 </button>
               </div>

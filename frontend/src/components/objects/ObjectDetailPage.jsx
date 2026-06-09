@@ -1,105 +1,112 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getObject, updateObject, deleteObject, getMentions, mentionSearch, createObject, getEntryContext } from '../../api'
+import {
+  getObject, updateObject, deleteObject,
+  getMentions, mentionSearch, createObject, getEntryContext
+} from '../../api'
 import styles from './ObjectDetailPage.module.css'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
 const TYPE_META  = {
-  PERSON:       { emoji: '👤', color: '#c97c4e', bg: '#2d1f17' },
-  PLACE:        { emoji: '📍', color: '#5b8def', bg: '#172030' },
-  IDEA:         { emoji: '💡', color: '#e0c040', bg: '#2a2010' },
-  ORGANIZATION: { emoji: '🏢', color: '#3dbfa0', bg: '#112620' },
+  PERSON:       { emoji:'👤', color:'#c97c4e', bg:'#2d1f17' },
+  PLACE:        { emoji:'📍', color:'#5b8def', bg:'#172030' },
+  IDEA:         { emoji:'💡', color:'#e0c040', bg:'#2a2010' },
+  ORGANIZATION: { emoji:'🏢', color:'#3dbfa0', bg:'#112620' },
 }
-const TYPE_EMOJI = { PERSON: '👤', PLACE: '📍', IDEA: '💡', ORGANIZATION: '🏢' }
+const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢' }
+const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION']
 
 function parseMd(md) {
-  const segs = []
-  let last = 0
-  MENTION_RE.lastIndex = 0
-  let m
+  const segs = []; let last = 0
+  MENTION_RE.lastIndex = 0; let m
   while ((m = MENTION_RE.exec(md)) !== null) {
-    if (m.index > last) segs.push({ type: 'text', val: md.slice(last, m.index) })
-    segs.push({ type: 'mention', val: m[1], id: m[2] })
+    if (m.index > last) segs.push({ type:'text', val: md.slice(last, m.index) })
+    segs.push({ type:'mention', val: m[1], id: m[2] })
     last = m.index + m[0].length
   }
-  if (last < md.length) segs.push({ type: 'text', val: md.slice(last) })
+  if (last < md.length) segs.push({ type:'text', val: md.slice(last) })
   return segs
 }
-
 function toMd(segs) {
   return segs.map(s => s.type === 'mention' ? `@[${s.val}](${s.id})` : s.val).join('')
 }
-
 function toDisplay(segs) {
   return segs.map(s => s.type === 'mention' ? `@${s.val}` : s.val).join('')
 }
-
 function reconcile(oldSegs, newDisplay) {
-  const newSegs = []
-  let cursor = 0
+  const out = []; let cursor = 0
   for (const seg of oldSegs) {
     if (seg.type !== 'mention') continue
     const token = `@${seg.val}`
     const idx = newDisplay.indexOf(token, cursor)
     if (idx === -1) continue
-    if (idx > cursor) newSegs.push({ type: 'text', val: newDisplay.slice(cursor, idx) })
-    newSegs.push(seg)
+    if (idx > cursor) out.push({ type:'text', val: newDisplay.slice(cursor, idx) })
+    out.push(seg)
     cursor = idx + token.length
   }
-  if (cursor < newDisplay.length) newSegs.push({ type: 'text', val: newDisplay.slice(cursor) })
-  if (newSegs.length === 0) return newDisplay.length > 0 ? [{ type: 'text', val: newDisplay }] : []
-  return newSegs
+  if (cursor < newDisplay.length) out.push({ type:'text', val: newDisplay.slice(cursor) })
+  return out.length === 0 && newDisplay.length > 0
+    ? [{ type:'text', val: newDisplay }]
+    : out
 }
-
 function formatDate(s) {
   if (!s || s.length < 10) return s
-  try { return new Date(s + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) }
+  try { return new Date(s + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }) }
   catch { return s }
 }
 
 export default function ObjectDetailPage() {
   const { id }    = useParams()
   const navigate  = useNavigate()
-  const [obj, setObj]         = useState(null)
-  const [title, setTitle]     = useState('')
+
+  const [obj,       setObj]       = useState(null)
+  const [title,     setTitle]     = useState('')
   const [backlinks, setBacklinks] = useState([])
-  const segsRef    = useRef([])
-  const taRef      = useRef(null)
-  const anchorRef  = useRef(-1)  // -1 = no active @, set after insert to prevent re-trigger
-  const saveTimer  = useRef(null)
-  const titleTimer = useRef(null)
-  const [query, setQuery]       = useState(null)
-  const [results, setResults]   = useState([])
-  const [selIdx, setSelIdx]     = useState(0)
+
+  // Notes editor refs
+  const segsRef     = useRef([])
+  const taRef       = useRef(null)
+  const saveTimer   = useRef(null)
+  const titleTimer  = useRef(null)
+  const anchorRef   = useRef(-1)
+  const skipNextRef = useRef(false)
+
+  const [query,      setQuery]      = useState(null)
+  const [results,    setResults]    = useState([])
+  const [selIdx,     setSelIdx]     = useState(0)
   const [createType, setCreateType] = useState('PERSON')
 
+  // Load object
   useEffect(() => {
     getObject(id).then(o => {
       setObj(o)
       setTitle(o.title)
       const segs = parseMd(o.notes || '')
-      segsRef.current = segs
+      segsRef.current   = segs
+      anchorRef.current = -1
+      skipNextRef.current = false
       if (taRef.current) taRef.current.value = toDisplay(segs)
     }).catch(() => navigate('/objects'))
   }, [id])
 
+  // Load backlinks
   useEffect(() => {
     getMentions(id).then(async mentions => {
       const enriched = await Promise.all(mentions.map(async m => {
         if (m.source_type === 'diary') {
           try {
             const ctx = await getEntryContext(m.source_id, id)
-            return { id: m.id, type: 'diary', sourceId: m.source_id, label: ctx.date, snippet: ctx.snippet }
+            return { id: m.id, type:'diary', sourceId: m.source_id, label: ctx.date, snippet: ctx.snippet }
           } catch {
-            return { id: m.id, type: 'diary', sourceId: m.source_id, label: m.created_at?.slice(0,10), snippet: '' }
+            return { id: m.id, type:'diary', sourceId: m.source_id, label: m.created_at?.slice(0,10), snippet:'' }
           }
         } else {
           try {
             const res = await fetch(`/api/objects/${m.source_id}`)
             const src = await res.json()
-            return { id: m.id, type: 'object', sourceId: m.source_id, label: src.title, objectType: src.type, snippet: '' }
+            return { id: m.id, type:'object', sourceId: m.source_id, label: src.title, objectType: src.type, snippet:'' }
           } catch {
-            return { id: m.id, type: 'object', sourceId: m.source_id, label: 'Object', snippet: '' }
+            return { id: m.id, type:'object', sourceId: m.source_id, label:'Object', snippet:'' }
           }
         }
       }))
@@ -107,11 +114,13 @@ export default function ObjectDetailPage() {
     }).catch(() => {})
   }, [id])
 
+  // Mention search
   useEffect(() => {
     if (query === null) { setResults([]); setSelIdx(0); return }
     mentionSearch(query).then(r => { setResults(r); setSelIdx(0) }).catch(() => {})
   }, [query])
 
+  // Save notes
   const saveNotes = useCallback(() => {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
@@ -119,6 +128,7 @@ export default function ObjectDetailPage() {
     }, 500)
   }, [id])
 
+  // Save title
   const saveTitle = useCallback((val) => {
     clearTimeout(titleTimer.current)
     titleTimer.current = setTimeout(() => {
@@ -126,14 +136,15 @@ export default function ObjectDetailPage() {
     }, 600)
   }, [id])
 
+  // Flush on unmount
   useEffect(() => {
     return () => {
       clearTimeout(saveTimer.current)
       clearTimeout(titleTimer.current)
-      updateObject(id, { notes: toMd(segsRef.current), title: title.trim() || 'Untitled' }).catch(() => {})
     }
-  }, [id, title])
+  }, [])
 
+  // onChange for notes textarea
   const handleNotesChange = useCallback((e) => {
     const ta     = e.target
     const newVal = ta.value
@@ -141,12 +152,17 @@ export default function ObjectDetailPage() {
     segsRef.current = reconcile(segsRef.current, newVal)
     saveNotes()
 
+    if (skipNextRef.current) {
+      skipNextRef.current = false
+      setQuery(null)
+      return
+    }
+
     const before = newVal.slice(0, cursor)
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
       const frag = before.slice(atIdx + 1)
-      const isConsumed = (anchorRef.current !== -1 && atIdx === anchorRef.current)
-      if (!frag.includes('\n') && !isConsumed) {
+      if (!frag.includes('\n')) {
         anchorRef.current = atIdx
         setQuery(frag)
         return
@@ -155,10 +171,12 @@ export default function ObjectDetailPage() {
     setQuery(null)
   }, [saveNotes])
 
+  // Insert mention
   const doInsert = useCallback((selObj) => {
     const ta = taRef.current
     if (!ta) return
     const anchor = anchorRef.current
+    if (anchor < 0) return
     const cursor = ta.selectionStart
     const before = ta.value.slice(0, anchor)
     const after  = ta.value.slice(cursor)
@@ -166,17 +184,19 @@ export default function ObjectDetailPage() {
     const newVal = before + token + ' ' + after
 
     const beforeSegs = reconcile(segsRef.current, before)
-    segsRef.current  = [
+    segsRef.current = [
       ...beforeSegs,
-      { type: 'mention', val: selObj.title, id: selObj.id },
-      { type: 'text', val: ' ' + after }
+      { type:'mention', val: selObj.title, id: selObj.id },
+      { type:'text', val: ' ' + after }
     ]
 
     ta.value = newVal
     const newPos = anchor + token.length + 1
     ta.setSelectionRange(newPos, newPos)
     ta.focus()
-    anchorRef.current = -1
+
+    skipNextRef.current = true
+    anchorRef.current   = -1
     setQuery(null)
     setResults([])
     saveNotes()
@@ -189,16 +209,15 @@ export default function ObjectDetailPage() {
 
   const handleKeyDown = useCallback((e) => {
     if (query !== null) {
-      if (e.key === 'ArrowDown')  { e.preventDefault(); setSelIdx(i => Math.min(i + 1, results.length)) }
-      else if (e.key === 'ArrowUp')   { e.preventDefault(); setSelIdx(i => Math.max(i - 1, 0)) }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSelIdx(i => Math.min(i + 1, results.length)) }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setSelIdx(i => Math.max(i - 1, 0)) }
       else if (e.key === 'Enter') {
         e.preventDefault()
         if (selIdx < results.length) doInsert(results[selIdx])
-        else if (query.trim()) doCreate(query.trim(), 'PERSON')
-      }
-      else if (e.key === 'Escape') setQuery(null)
+        else if (query.trim()) doCreate(query.trim(), createType)
+      } else if (e.key === 'Escape') setQuery(null)
     }
-  }, [query, results, selIdx, doInsert, doCreate])
+  }, [query, results, selIdx, doInsert, doCreate, createType])
 
   const handleBacklinkClick = useCallback((item) => {
     if (item.type === 'diary' && item.label) navigate('/', { state: { targetDate: item.label } })
@@ -243,6 +262,7 @@ export default function ObjectDetailPage() {
 
       <div className={styles.divider} />
 
+      {/* Notes editor */}
       <div className={styles.notesWrap}>
         <textarea
           ref={taRef}
@@ -276,8 +296,8 @@ export default function ObjectDetailPage() {
                   <span className={styles.createPlus}>＋</span>
                   <span className={styles.createLabel}>Create "{query.trim()}" as:</span>
                 </div>
-                <div className={styles.typeRow}>
-                  {['PERSON','PLACE','IDEA','ORGANIZATION'].map(t => (
+                <div className={styles.typeRow2}>
+                  {TYPE_NAMES.map(t => (
                     <button key={t}
                       className={`${styles.typeBtn} ${createType === t ? styles.typeBtnActive : ''}`}
                       onMouseDown={e => { e.preventDefault(); setCreateType(t) }}>
