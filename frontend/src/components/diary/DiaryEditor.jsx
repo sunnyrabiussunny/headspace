@@ -44,8 +44,9 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   const segsRef      = useRef([])
   const taRef        = useRef(null)
   const saveTimer    = useRef(null)
-  const anchorRef    = useRef(-1)   // position of current @; -1 = no active mention
-  const skipNextRef  = useRef(false) // true for one onChange after doInsert
+  const anchorRef       = useRef(-1)   // position of current @
+  const skipNextRef     = useRef(false) // skip ONE onChange after insert
+  const lastInsertEndRef = useRef(-1)  // cursor position right after last insert
 
   const [query,      setQuery]      = useState(null)
   const [results,    setResults]    = useState([])
@@ -56,8 +57,9 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   useEffect(() => {
     const segs = parseMd(entry.content || '')
     segsRef.current = segs
-    anchorRef.current = -1
-    skipNextRef.current = false
+    anchorRef.current        = -1
+    skipNextRef.current      = false
+    lastInsertEndRef.current = -1
     const d = toDisplay(segs)
     if (taRef.current) {
       taRef.current.value = d
@@ -109,9 +111,10 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
       const frag = before.slice(atIdx + 1)
-      // Spaces allowed in query (names like "Riyan Hoq")
-      // But close if there's a newline after @
-      if (!frag.includes('\n')) {
+      // Only open popup if this @ is AFTER the end of the last inserted token.
+      // atIdx < lastInsertEndRef means it's the @ we already consumed — ignore it.
+      const alreadyUsed = lastInsertEndRef.current > 0 && atIdx < lastInsertEndRef.current
+      if (!frag.includes('\n') && !alreadyUsed) {
         anchorRef.current = atIdx
         setQuery(frag)
         return
@@ -144,9 +147,10 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     ta.setSelectionRange(newPos, newPos)
     ta.focus()
 
-    // Skip next onChange so space after insertion doesn't reopen popup
-    skipNextRef.current = true
-    anchorRef.current   = -1
+    // Mark this @ as consumed — any @ at/before newPos is ignored until user types a new @
+    skipNextRef.current    = true
+    anchorRef.current      = -1
+    lastInsertEndRef.current = newPos
     setQuery(null)
     setResults([])
     save()

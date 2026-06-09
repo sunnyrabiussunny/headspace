@@ -68,8 +68,9 @@ export default function ObjectDetailPage() {
   const taRef       = useRef(null)
   const saveTimer   = useRef(null)
   const titleTimer  = useRef(null)
-  const anchorRef   = useRef(-1)
-  const skipNextRef = useRef(false)
+  const anchorRef       = useRef(-1)
+  const skipNextRef     = useRef(false)
+  const lastInsertEndRef = useRef(-1)
 
   const [query,      setQuery]      = useState(null)
   const [results,    setResults]    = useState([])
@@ -83,8 +84,9 @@ export default function ObjectDetailPage() {
       setTitle(o.title)
       const segs = parseMd(o.notes || '')
       segsRef.current   = segs
-      anchorRef.current = -1
-      skipNextRef.current = false
+      anchorRef.current        = -1
+      skipNextRef.current      = false
+      lastInsertEndRef.current = -1
       if (taRef.current) taRef.current.value = toDisplay(segs)
     }).catch(() => navigate('/objects'))
   }, [id])
@@ -162,7 +164,10 @@ export default function ObjectDetailPage() {
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
       const frag = before.slice(atIdx + 1)
-      if (!frag.includes('\n')) {
+      // Only open popup if this @ is AFTER the end of the last inserted token.
+      // atIdx < lastInsertEndRef means it's the @ we already consumed — ignore it.
+      const alreadyUsed = lastInsertEndRef.current > 0 && atIdx < lastInsertEndRef.current
+      if (!frag.includes('\n') && !alreadyUsed) {
         anchorRef.current = atIdx
         setQuery(frag)
         return
@@ -195,8 +200,9 @@ export default function ObjectDetailPage() {
     ta.setSelectionRange(newPos, newPos)
     ta.focus()
 
-    skipNextRef.current = true
-    anchorRef.current   = -1
+    skipNextRef.current      = true
+    anchorRef.current        = -1
+    lastInsertEndRef.current = newPos
     setQuery(null)
     setResults([])
     saveNotes()
