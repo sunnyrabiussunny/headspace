@@ -129,3 +129,21 @@
 .createConfirm:hover { opacity: .85; }
 
 .typeRow2 { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Toolbar right group */
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Saved badge — appears briefly after auto-save */
+.savedBadge {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-teal);
+  background: rgba(61,191,160,.12);
+  padding: 3px 10px;
+  border-radius: 6px;
+  animation: fadeIn .15s ease;
+}

@@ -70,9 +70,11 @@ export default function ObjectDetailPage() {
   const titleTimer  = useRef(null)
   const anchorRef       = useRef(-1)
   const skipNextRef     = useRef(false)
-  const lastInsertEndRef = useRef(-1)
+  const lastInsertEndRef  = useRef(-1)
+  const pendingDisplayRef  = useRef(null)  // notes text waiting to be set on textarea
 
   const [query,      setQuery]      = useState(null)
+  const [saved,      setSaved]      = useState(false)
   const [results,    setResults]    = useState([])
   const [selIdx,     setSelIdx]     = useState(0)
   const [createType, setCreateType] = useState('PERSON')
@@ -83,13 +85,23 @@ export default function ObjectDetailPage() {
       setObj(o)
       setTitle(o.title)
       const segs = parseMd(o.notes || '')
-      segsRef.current   = segs
+      segsRef.current          = segs
       anchorRef.current        = -1
       skipNextRef.current      = false
       lastInsertEndRef.current = -1
-      if (taRef.current) taRef.current.value = toDisplay(segs)
+      // taRef may not exist yet (first render returns null for loading state)
+      // We store the display text and apply it after render via a separate effect
+      pendingDisplayRef.current = toDisplay(segs)
     }).catch(() => navigate('/objects'))
   }, [id])
+
+  // Apply loaded notes to textarea after it renders (obj state triggers re-render)
+  useEffect(() => {
+    if (taRef.current && pendingDisplayRef.current !== null) {
+      taRef.current.value = pendingDisplayRef.current
+      pendingDisplayRef.current = null
+    }
+  }, [obj])
 
   // Load backlinks
   useEffect(() => {
@@ -126,7 +138,9 @@ export default function ObjectDetailPage() {
   const saveNotes = useCallback(() => {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      updateObject(id, { notes: toMd(segsRef.current) }).catch(() => {})
+      updateObject(id, { notes: toMd(segsRef.current) })
+        .then(() => { setSaved(true); setTimeout(() => setSaved(false), 1800) })
+        .catch(() => {})
     }, 500)
   }, [id])
 
@@ -243,7 +257,10 @@ export default function ObjectDetailPage() {
     <div className={styles.page}>
       <div className={styles.toolbar}>
         <button className={styles.backBtn} onClick={() => navigate('/objects')}><ArrowLeft /></button>
-        <button className={styles.delBtn} onClick={handleDelete}>Delete</button>
+        <div className={styles.toolbarRight}>
+          {saved && <span className={styles.savedBadge}>Saved</span>}
+          <button className={styles.delBtn} onClick={handleDelete}>Delete</button>
+        </div>
       </div>
 
       <div className={styles.typeRow}>
@@ -256,6 +273,10 @@ export default function ObjectDetailPage() {
         className={styles.titleInput}
         value={title}
         onChange={e => { setTitle(e.target.value); saveTitle(e.target.value) }}
+        onBlur={e => {
+          clearTimeout(titleTimer.current)
+          updateObject(id, { title: e.target.value.trim() || 'Untitled' }).catch(() => {})
+        }}
         placeholder="Title"
       />
 
@@ -275,6 +296,11 @@ export default function ObjectDetailPage() {
           className={styles.notesTa}
           onChange={handleNotesChange}
           onKeyDown={handleKeyDown}
+          onBlur={() => {
+            // Immediate save when user clicks away
+            clearTimeout(saveTimer.current)
+            updateObject(id, { notes: toMd(segsRef.current) }).catch(() => {})
+          }}
           placeholder="Notes... (type @ to link another object)"
           spellCheck={false}
           defaultValue=""
