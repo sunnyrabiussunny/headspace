@@ -49,6 +49,30 @@ function reconcile(oldSegs, newDisplay) {
     ? [{ type:'text', val: newDisplay }]
     : out
 }
+function renderRichNotes(md, navigate) {
+  if (!md || !md.trim()) {
+    return <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>Click to add notes... (type @ to link an object)</span>
+  }
+  const MENTION_RE_LOCAL = /@\[([^\]]+)\]\(([^)]+)\)/g
+  const parts = []
+  let last = 0, m
+  MENTION_RE_LOCAL.lastIndex = 0
+  while ((m = MENTION_RE_LOCAL.exec(md)) !== null) {
+    if (m.index > last) parts.push(<span key={`t${last}`}>{md.slice(last, m.index)}</span>)
+    const name = m[1], objId = m[2]
+    parts.push(
+      <span
+        key={`m${m.index}`}
+        style={{ color: 'var(--accent-teal)', fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer' }}
+        onClick={e => { e.stopPropagation(); navigate(`/objects/${objId}`) }}
+      >{name}</span>
+    )
+    last = m.index + m[0].length
+  }
+  if (last < md.length) parts.push(<span key={`tend`}>{md.slice(last)}</span>)
+  return parts
+}
+
 function formatDate(s) {
   if (!s || s.length < 10) return s
   try { return new Date(s + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }) }
@@ -128,6 +152,15 @@ export default function ObjectDetailPage() {
     }).catch(() => {})
   }, [id])
 
+  // Focus textarea when entering edit mode
+  useEffect(() => {
+    if (isEditing && taRef.current) {
+      taRef.current.focus()
+      const len = taRef.current.value.length
+      taRef.current.setSelectionRange(len, len)
+    }
+  }, [isEditing])
+
   // Mention search
   useEffect(() => {
     if (query === null) { setResults([]); setSelIdx(0); return }
@@ -135,6 +168,15 @@ export default function ObjectDetailPage() {
   }, [query])
 
   // Save notes
+  const handleDone = useCallback(() => {
+    clearTimeout(saveTimer.current)
+    updateObject(id, { notes: toMd(segsRef.current) })
+      .then(() => { setSaved(true); setTimeout(() => setSaved(false), 1800) })
+      .catch(() => {})
+    setIsEditing(false)
+    setQuery(null)
+  }, [id])
+
   const saveNotes = useCallback(() => {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
@@ -256,9 +298,14 @@ export default function ObjectDetailPage() {
   return (
     <div className={styles.page}>
       <div className={styles.toolbar}>
-        <button className={styles.backBtn} onClick={() => navigate('/objects')}><ArrowLeft /></button>
+        <button className={styles.backBtn} onClick={() => { handleDone(); navigate('/objects') }}><ArrowLeft /> Back</button>
         <div className={styles.toolbarRight}>
           {saved && <span className={styles.savedBadge}>Saved</span>}
+          {isEditing && (
+            <button className={styles.doneToolbarBtn} onClick={handleDone}>
+              <CheckIcon /> Done
+            </button>
+          )}
           <button className={styles.delBtn} onClick={handleDelete}>Delete</button>
         </div>
       </div>
@@ -289,22 +336,39 @@ export default function ObjectDetailPage() {
 
       <div className={styles.divider} />
 
-      {/* Notes editor */}
+      {/* Notes — read view or edit view */}
       <div className={styles.notesWrap}>
-        <textarea
-          ref={taRef}
-          className={styles.notesTa}
-          onChange={handleNotesChange}
-          onKeyDown={handleKeyDown}
-          onBlur={() => {
-            // Immediate save when user clicks away
-            clearTimeout(saveTimer.current)
-            updateObject(id, { notes: toMd(segsRef.current) }).catch(() => {})
-          }}
-          placeholder="Notes... (type @ to link another object)"
-          spellCheck={false}
-          defaultValue=""
-        />
+        {!isEditing ? (
+          <div
+            className={styles.notesReadView}
+            onClick={() => setIsEditing(true)}
+            title="Click to edit"
+          >
+            {renderRichNotes(toMd(segsRef.current), navigate)}
+          </div>
+        ) : (
+          <>
+            <div className={styles.notesEditorHeader}>
+              <span className={styles.notesEditingLabel}>Editing notes</span>
+              <button className={styles.doneBtn} onClick={handleDone}>
+                <CheckIcon /> Done
+              </button>
+            </div>
+            <textarea
+              ref={taRef}
+              className={styles.notesTa}
+              onChange={handleNotesChange}
+              onKeyDown={handleKeyDown}
+              onBlur={() => {
+                clearTimeout(saveTimer.current)
+                updateObject(id, { notes: toMd(segsRef.current) }).catch(() => {})
+              }}
+              placeholder="Notes... (type @ to link another object)"
+              spellCheck={false}
+              defaultValue=""
+            />
+          </>
+        )}
         {query !== null && (
           <div className={styles.popup}>
             <div className={styles.popupHint}>↑↓ navigate · Enter select · Esc close</div>
@@ -369,6 +433,7 @@ export default function ObjectDetailPage() {
   )
 }
 
+function CheckIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> }
 function ArrowLeft()  { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> }
 function TagIcon()    { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> }
 function CalIcon()    { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> }
