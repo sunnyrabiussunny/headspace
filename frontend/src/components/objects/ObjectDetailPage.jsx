@@ -102,6 +102,8 @@ export default function ObjectDetailPage() {
   const [results,    setResults]    = useState([])
   const [selIdx,     setSelIdx]     = useState(0)
   const [createType, setCreateType] = useState('PERSON')
+  const [isEditing,  setIsEditing]  = useState(false)
+  const [notesMd,    setNotesMd]    = useState('')
 
   // Load object
   useEffect(() => {
@@ -113,9 +115,8 @@ export default function ObjectDetailPage() {
       anchorRef.current        = -1
       skipNextRef.current      = false
       lastInsertEndRef.current = -1
-      // taRef may not exist yet (first render returns null for loading state)
-      // We store the display text and apply it after render via a separate effect
       pendingDisplayRef.current = toDisplay(segs)
+      setNotesMd(o.notes || '')  // update state so read view renders correctly
     }).catch(() => navigate('/objects'))
   }, [id])
 
@@ -170,7 +171,9 @@ export default function ObjectDetailPage() {
   // Save notes
   const handleDone = useCallback(() => {
     clearTimeout(saveTimer.current)
-    updateObject(id, { notes: toMd(segsRef.current) })
+    const md = toMd(segsRef.current)
+    setNotesMd(md)  // update state so read view shows updated mentions immediately
+    updateObject(id, { notes: md })
       .then(() => { setSaved(true); setTimeout(() => setSaved(false), 1800) })
       .catch(() => {})
     setIsEditing(false)
@@ -180,7 +183,9 @@ export default function ObjectDetailPage() {
   const saveNotes = useCallback(() => {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      updateObject(id, { notes: toMd(segsRef.current) })
+      const md = toMd(segsRef.current)
+      setNotesMd(md)  // update state so read view re-renders with new mentions
+      updateObject(id, { notes: md })
         .then(() => { setSaved(true); setTimeout(() => setSaved(false), 1800) })
         .catch(() => {})
     }, 500)
@@ -344,7 +349,7 @@ export default function ObjectDetailPage() {
             onClick={() => setIsEditing(true)}
             title="Click to edit"
           >
-            {renderRichNotes(toMd(segsRef.current), navigate)}
+            {renderRichNotes(notesMd, navigate)}
           </div>
         ) : (
           <>
