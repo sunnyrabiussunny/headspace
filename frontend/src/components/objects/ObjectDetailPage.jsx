@@ -153,12 +153,14 @@ export default function ObjectDetailPage() {
     }).catch(() => {})
   }, [id])
 
-  // Focus textarea when entering edit mode
+  // When entering edit mode: populate textarea from segsRef then focus
   useEffect(() => {
     if (isEditing && taRef.current) {
+      // Always restore the current notes into the textarea when edit mode opens
+      const displayVal = toDisplay(segsRef.current)
+      taRef.current.value = displayVal
       taRef.current.focus()
-      const len = taRef.current.value.length
-      taRef.current.setSelectionRange(len, len)
+      taRef.current.setSelectionRange(displayVal.length, displayVal.length)
     }
   }, [isEditing])
 
