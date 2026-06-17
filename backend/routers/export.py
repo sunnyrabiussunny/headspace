@@ -211,3 +211,147 @@ async def _upsert_object(db: AsyncSession, data: dict):
             tags=data.get("tags", []),
             properties=data.get("properties", {}),
         ))
+
+
+# ── Capacities Import ─────────────────────────────────────────────────────────
+
+@router.post("/import-capacities")
+async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    """
+    Import from a Capacities JSON export.
+    Capacities exports a single JSON with keys like 'spaces', 'objects', 'dailyNotes', etc.
+    We map:
+      - dailyNotes / journal entries → DiaryEntry
+      - objects (people, places, tags, etc.) → KnowledgeObject
+    """
+    content = await file.read()
+    try:
+        data = json.loads(content)
+    except Exception:
+        raise HTTPException(400, "Invalid JSON file")
+
+    entries_count = 0
+    objects_count = 0
+
+    # Handle array of exports or single export object
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        items = []
+        # Capacities structures: try common keys
+        for key in ("dailyNotes", "journal", "entries", "notes"):
+            if key in data and isinstance(data[key], list):
+                items.extend(data[key])
+        for key in ("objects", "people", "places", "media", "ideas", "tags"):
+            if key in data and isinstance(data[key], list):
+                items.extend(data[key])
+        # If nothing matched, treat top-level as a single object
+        if not items:
+            items = [data]
+    else:
+        raise HTTPException(400, "Unrecognized Capacities export format")
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        # Detect diary/journal entries
+        cap_type = (item.get("type") or item.get("objectType") or "").lower()
+        has_date = "date" in item or "createdAt" in item or "day" in item
+
+        if cap_type in ("dailynote", "journal", "note", "entry") or (
+            has_date and ("content" in item or "text" in item or "body" in item)
+        ):
+            raw_date = item.get("date") or item.get("day") or item.get("createdAt", "")
+            # Extract YYYY-MM-DD from ISO string
+            date_str = str(raw_date)[:10] if raw_date else ""
+            if not date_str or len(date_str) < 10:
+                continue
+            content_text = item.get("content") or item.get("text") or item.get("body") or ""
+            tags = _extract_capacities_tags(item)
+            entry_id = item.get("id") or str(uuid.uuid4())
+
+            existing = await db.execute(select(DiaryEntry).where(DiaryEntry.id == entry_id))
+            ex = existing.scalar_one_or_none()
+            if ex:
+                ex.content = ex.content + "\n\n" + content_text if ex.content else content_text
+            else:
+                db.add(DiaryEntry(
+                    id=entry_id,
+                    date=date_str,
+                    content=content_text,
+                    tags=tags,
+                ))
+            entries_count += 1
+
+        else:
+            # Knowledge object
+            title = item.get("title") or item.get("name") or item.get("label") or ""
+            if not title:
+                continue
+
+            obj_type = _map_capacities_type(cap_type)
+            description = item.get("description") or item.get("subtitle") or ""
+            notes = item.get("notes") or item.get("content") or item.get("text") or ""
+            tags = _extract_capacities_tags(item)
+            obj_id = item.get("id") or str(uuid.uuid4())
+
+            existing = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == obj_id))
+            ex = existing.scalar_one_or_none()
+            if ex:
+                ex.title = title
+                ex.description = description or ex.description
+                ex.notes = notes or ex.notes
+            else:
+                db.add(KnowledgeObject(
+                    id=obj_id,
+                    type=obj_type,
+                    title=title,
+                    description=description,
+                    notes=notes,
+                    tags=tags,
+                    properties={},
+                ))
+            objects_count += 1
+
+    await db.commit()
+    return {
+        "status": "ok",
+        "entries_imported": entries_count,
+        "objects_imported": objects_count,
+    }
+
+
+def _extract_capacities_tags(item: dict) -> list:
+    tags = []
+    for key in ("tags", "labels", "hashtags"):
+        val = item.get(key)
+        if isinstance(val, list):
+            for t in val:
+                if isinstance(t, str):
+                    tags.append(t.lstrip("#"))
+                elif isinstance(t, dict):
+                    name = t.get("name") or t.get("title") or ""
+                    if name:
+                        tags.append(name.lstrip("#"))
+    return list(set(tags))
+
+
+def _map_capacities_type(cap_type: str) -> str:
+    mapping = {
+        "person": "PERSON",
+        "contact": "PERSON",
+        "place": "PLACE",
+        "location": "PLACE",
+        "media": "MEDIA",
+        "book": "MEDIA",
+        "movie": "MEDIA",
+        "article": "MEDIA",
+        "podcast": "MEDIA",
+        "organization": "ORGANIZATION",
+        "company": "ORGANIZATION",
+        "idea": "IDEA",
+        "concept": "IDEA",
+        "tag": "IDEA",
+    }
+    return mapping.get(cap_type.lower(), "IDEA")

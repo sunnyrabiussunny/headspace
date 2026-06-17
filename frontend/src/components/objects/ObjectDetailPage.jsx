@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   getObject, updateObject, deleteObject,
-  getMentions, mentionSearch, createObject, getEntryContext
+  getMentions, mentionSearch, createObject, getEntryContext,
+  listObjects, mergeObjects
 } from '../../api'
+import toast from 'react-hot-toast'
 import styles from './ObjectDetailPage.module.css'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
@@ -12,9 +14,10 @@ const TYPE_META  = {
   PLACE:        { emoji:'📍', color:'#5b8def', bg:'#172030' },
   IDEA:         { emoji:'💡', color:'#e0c040', bg:'#2a2010' },
   ORGANIZATION: { emoji:'🏢', color:'#3dbfa0', bg:'#112620' },
+  MEDIA:        { emoji:'🎬', color:'#9b6fd4', bg:'#1e1228' },
 }
-const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢' }
-const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION']
+const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢', MEDIA:'🎬' }
+const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION','MEDIA']
 
 function parseMd(md) {
   const segs = []; let last = 0
@@ -53,23 +56,22 @@ function renderRichNotes(md, navigate) {
   if (!md || !md.trim()) {
     return <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>Click to add notes... (type @ to link an object)</span>
   }
-  const MENTION_RE_LOCAL = /@\[([^\]]+)\]\(([^)]+)\)/g
+  const re = /@\[([^\]]+)\]\(([^)]+)\)/g
   const parts = []
   let last = 0, m
-  MENTION_RE_LOCAL.lastIndex = 0
-  while ((m = MENTION_RE_LOCAL.exec(md)) !== null) {
+  re.lastIndex = 0
+  while ((m = re.exec(md)) !== null) {
     if (m.index > last) parts.push(<span key={`t${last}`}>{md.slice(last, m.index)}</span>)
     const name = m[1], objId = m[2]
     parts.push(
-      <span
-        key={`m${m.index}`}
-        style={{ color: 'var(--accent-teal)', fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: 2, cursor: 'pointer' }}
+      <span key={`m${m.index}`}
+        style={{ color:'var(--accent-teal)', fontWeight:600, textDecoration:'underline', textUnderlineOffset:2, cursor:'pointer' }}
         onClick={e => { e.stopPropagation(); navigate(`/objects/${objId}`) }}
       >{name}</span>
     )
     last = m.index + m[0].length
   }
-  if (last < md.length) parts.push(<span key={`tend`}>{md.slice(last)}</span>)
+  if (last < md.length) parts.push(<span key="tend">{md.slice(last)}</span>)
   return parts
 }
 
@@ -80,22 +82,26 @@ function formatDate(s) {
 }
 
 export default function ObjectDetailPage() {
-  const { id }    = useParams()
-  const navigate  = useNavigate()
+  const { id }   = useParams()
+  const navigate = useNavigate()
 
   const [obj,       setObj]       = useState(null)
   const [title,     setTitle]     = useState('')
   const [backlinks, setBacklinks] = useState([])
+  const [showMerge, setShowMerge] = useState(false)
+  const [allObjects, setAllObjects] = useState([])
+  const [mergeTarget, setMergeTarget] = useState('')
+  const [mergeSearch, setMergeSearch] = useState('')
+  const [merging,   setMerging]   = useState(false)
 
-  // Notes editor refs
-  const segsRef     = useRef([])
-  const taRef       = useRef(null)
-  const saveTimer   = useRef(null)
-  const titleTimer  = useRef(null)
-  const anchorRef       = useRef(-1)
-  const skipNextRef     = useRef(false)
+  const segsRef           = useRef([])
+  const taRef             = useRef(null)
+  const saveTimer         = useRef(null)
+  const titleTimer        = useRef(null)
+  const anchorRef         = useRef(-1)
+  const skipNextRef       = useRef(false)
   const lastInsertEndRef  = useRef(-1)
-  const pendingDisplayRef  = useRef(null)  // notes text waiting to be set on textarea
+  const pendingDisplayRef = useRef(null)
 
   const [query,      setQuery]      = useState(null)
   const [saved,      setSaved]      = useState(false)
@@ -116,11 +122,10 @@ export default function ObjectDetailPage() {
       skipNextRef.current      = false
       lastInsertEndRef.current = -1
       pendingDisplayRef.current = toDisplay(segs)
-      setNotesMd(o.notes || '')  // update state so read view renders correctly
+      setNotesMd(o.notes || '')
     }).catch(() => navigate('/objects'))
   }, [id])
 
-  // Apply loaded notes to textarea after it renders (obj state triggers re-render)
   useEffect(() => {
     if (taRef.current && pendingDisplayRef.current !== null) {
       taRef.current.value = pendingDisplayRef.current
@@ -153,10 +158,8 @@ export default function ObjectDetailPage() {
     }).catch(() => {})
   }, [id])
 
-  // When entering edit mode: populate textarea from segsRef then focus
   useEffect(() => {
     if (isEditing && taRef.current) {
-      // Always restore the current notes into the textarea when edit mode opens
       const displayVal = toDisplay(segsRef.current)
       taRef.current.value = displayVal
       taRef.current.focus()
@@ -164,17 +167,15 @@ export default function ObjectDetailPage() {
     }
   }, [isEditing])
 
-  // Mention search
   useEffect(() => {
     if (query === null) { setResults([]); setSelIdx(0); return }
     mentionSearch(query).then(r => { setResults(r); setSelIdx(0) }).catch(() => {})
   }, [query])
 
-  // Save notes
   const handleDone = useCallback(() => {
     clearTimeout(saveTimer.current)
     const md = toMd(segsRef.current)
-    setNotesMd(md)  // update state so read view shows updated mentions immediately
+    setNotesMd(md)
     updateObject(id, { notes: md })
       .then(() => { setSaved(true); setTimeout(() => setSaved(false), 1800) })
       .catch(() => {})
@@ -186,14 +187,13 @@ export default function ObjectDetailPage() {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
       const md = toMd(segsRef.current)
-      setNotesMd(md)  // update state so read view re-renders with new mentions
+      setNotesMd(md)
       updateObject(id, { notes: md })
         .then(() => { setSaved(true); setTimeout(() => setSaved(false), 1800) })
         .catch(() => {})
     }, 500)
   }, [id])
 
-  // Save title
   const saveTitle = useCallback((val) => {
     clearTimeout(titleTimer.current)
     titleTimer.current = setTimeout(() => {
@@ -201,7 +201,6 @@ export default function ObjectDetailPage() {
     }, 600)
   }, [id])
 
-  // Flush on unmount
   useEffect(() => {
     return () => {
       clearTimeout(saveTimer.current)
@@ -209,7 +208,6 @@ export default function ObjectDetailPage() {
     }
   }, [])
 
-  // onChange for notes textarea
   const handleNotesChange = useCallback((e) => {
     const ta     = e.target
     const newVal = ta.value
@@ -227,8 +225,6 @@ export default function ObjectDetailPage() {
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
       const frag = before.slice(atIdx + 1)
-      // Only open popup if this @ is AFTER the end of the last inserted token.
-      // atIdx < lastInsertEndRef means it's the @ we already consumed — ignore it.
       const alreadyUsed = lastInsertEndRef.current > 0 && atIdx < lastInsertEndRef.current
       if (!frag.includes('\n') && !alreadyUsed) {
         anchorRef.current = atIdx
@@ -239,7 +235,6 @@ export default function ObjectDetailPage() {
     setQuery(null)
   }, [saveNotes])
 
-  // Insert mention
   const doInsert = useCallback((selObj) => {
     const ta = taRef.current
     if (!ta) return
@@ -299,8 +294,36 @@ export default function ObjectDetailPage() {
     navigate('/objects')
   }
 
+  const openMerge = async () => {
+    try {
+      const all = await listObjects()
+      setAllObjects(all.filter(o => o.id !== id))
+      setMergeTarget('')
+      setMergeSearch('')
+      setShowMerge(true)
+    } catch { toast.error('Failed to load objects') }
+  }
+
+  const handleMerge = async () => {
+    if (!mergeTarget) return
+    const target = allObjects.find(o => o.id === mergeTarget)
+    if (!target) return
+    if (!window.confirm(`Merge "${obj.title}" into "${target.title}"? This object will be deleted and all its links will transfer.`)) return
+    setMerging(true)
+    try {
+      await mergeObjects(id, mergeTarget)
+      toast.success(`Merged into "${target.title}"`)
+      navigate(`/objects/${mergeTarget}`)
+    } catch { toast.error('Merge failed') }
+    finally { setMerging(false); setShowMerge(false) }
+  }
+
   if (!obj) return <div className={styles.loading}>Loading...</div>
   const meta = TYPE_META[obj.type] || TYPE_META.IDEA
+
+  const filteredForMerge = allObjects.filter(o =>
+    !mergeSearch || o.title.toLowerCase().includes(mergeSearch.toLowerCase())
+  )
 
   return (
     <div className={styles.page}>
@@ -313,6 +336,9 @@ export default function ObjectDetailPage() {
               <CheckIcon /> Done
             </button>
           )}
+          <button className={styles.mergeBtn} onClick={openMerge} title="Merge into another object">
+            <MergeIcon /> Merge
+          </button>
           <button className={styles.delBtn} onClick={handleDelete}>Delete</button>
         </div>
       </div>
@@ -343,23 +369,17 @@ export default function ObjectDetailPage() {
 
       <div className={styles.divider} />
 
-      {/* Notes — read view or edit view */}
+      {/* Notes */}
       <div className={styles.notesWrap}>
         {!isEditing ? (
-          <div
-            className={styles.notesReadView}
-            onClick={() => setIsEditing(true)}
-            title="Click to edit"
-          >
+          <div className={styles.notesReadView} onClick={() => setIsEditing(true)} title="Click to edit">
             {renderRichNotes(notesMd, navigate)}
           </div>
         ) : (
           <>
             <div className={styles.notesEditorHeader}>
               <span className={styles.notesEditingLabel}>Editing notes</span>
-              <button className={styles.doneBtn} onClick={handleDone}>
-                <CheckIcon /> Done
-              </button>
+              <button className={styles.doneBtn} onClick={handleDone}><CheckIcon /> Done</button>
             </div>
             <textarea
               ref={taRef}
@@ -436,12 +456,58 @@ export default function ObjectDetailPage() {
           ))}
         </div>
       )}
+
+      {/* Merge modal */}
+      {showMerge && (
+        <div className={styles.modalOverlay} onClick={() => setShowMerge(false)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()}>
+            <h2 className={styles.modalTitle}>Merge "{obj.title}" into…</h2>
+            <p className={styles.modalDesc}>
+              All backlinks will transfer to the target object. This object will be deleted.
+            </p>
+            <input
+              className={styles.mergeSearchInput}
+              placeholder="Search objects…"
+              value={mergeSearch}
+              onChange={e => setMergeSearch(e.target.value)}
+              autoFocus
+            />
+            <div className={styles.mergeList}>
+              {filteredForMerge.length === 0 && (
+                <div className={styles.mergeEmpty}>No objects found.</div>
+              )}
+              {filteredForMerge.slice(0, 20).map(o => (
+                <button
+                  key={o.id}
+                  className={`${styles.mergeRow} ${mergeTarget === o.id ? styles.mergeRowActive : ''}`}
+                  onClick={() => setMergeTarget(o.id)}
+                >
+                  <span>{TYPE_EMOJI[o.type] || '📄'}</span>
+                  <span className={styles.mergeRowTitle}>{o.title}</span>
+                  <span className={styles.mergeRowType}>{o.type}</span>
+                </button>
+              ))}
+            </div>
+            <div className={styles.modalActions}>
+              <button className="btn btn-secondary" onClick={() => setShowMerge(false)}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleMerge}
+                disabled={!mergeTarget || merging}
+              >
+                {merging ? 'Merging…' : 'Merge'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function CheckIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> }
+function CheckIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> }
 function ArrowLeft()  { return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> }
 function TagIcon()    { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg> }
 function CalIcon()    { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> }
 function LayersIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> }
+function MergeIcon()  { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg> }

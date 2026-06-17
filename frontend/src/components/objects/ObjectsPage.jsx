@@ -4,21 +4,22 @@ import { listObjects, createObject, deleteObject } from '../../api'
 import toast from 'react-hot-toast'
 import styles from './ObjectsPage.module.css'
 
-const TYPES = [
+export const TYPES = [
   { key: null,           label: 'All',          emoji: '' },
   { key: 'PERSON',       label: 'Person',        emoji: '👤' },
   { key: 'PLACE',        label: 'Place',         emoji: '📍' },
   { key: 'IDEA',         label: 'Idea',          emoji: '💡' },
   { key: 'ORGANIZATION', label: 'Organization',  emoji: '🏢' },
+  { key: 'MEDIA',        label: 'Media',         emoji: '🎬' },
 ]
 
 export default function ObjectsPage() {
-  const [objects, setObjects]     = useState([])
-  const [filter, setFilter]       = useState(null)
+  const [objects, setObjects]       = useState([])
+  const [filter, setFilter]         = useState(null)
   const [showCreate, setShowCreate] = useState(false)
-  const [newTitle, setNewTitle]   = useState('')
-  const [newType, setNewType]     = useState('PERSON')
-  const navigate                  = useNavigate()
+  const [newTitle, setNewTitle]     = useState('')
+  const [newType, setNewType]       = useState('PERSON')
+  const navigate                    = useNavigate()
 
   useEffect(() => {
     listObjects(filter).then(setObjects).catch(() => {})

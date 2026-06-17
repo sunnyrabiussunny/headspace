@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 import uuid
 
@@ -21,6 +21,17 @@ async def get_all_dates(db: AsyncSession = Depends(get_db)):
     return [row[0] for row in result.fetchall()]
 
 
+@router.get("/all", response_model=List[DiaryEntryOut])
+async def get_all_entries(tag: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    """Get all diary entries sorted by date desc, optionally filtered by tag."""
+    q = select(DiaryEntry).order_by(DiaryEntry.date.desc(), DiaryEntry.created_at.asc())
+    result = await db.execute(q)
+    entries = result.scalars().all()
+    if tag:
+        entries = [e for e in entries if tag in (e.tags or [])]
+    return entries
+
+
 @router.get("/date/{date}", response_model=List[DiaryEntryOut])
 async def get_entries_for_date(date: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -33,7 +44,6 @@ async def get_entries_for_date(date: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/entry/{entry_id}", response_model=DiaryEntryOut)
 async def get_entry_by_id(entry_id: str, db: AsyncSession = Depends(get_db)):
-    """Fetch a single diary entry by its ID — used for backlink enrichment."""
     result = await db.execute(
         select(DiaryEntry).where(DiaryEntry.id == entry_id)
     )
@@ -73,6 +83,11 @@ async def update_entry(
         entry.content = payload.content
     if payload.tags is not None:
         entry.tags = payload.tags
+    if payload.created_at is not None:
+        try:
+            entry.created_at = datetime.fromisoformat(payload.created_at.replace("Z", "+00:00"))
+        except Exception:
+            pass
     entry.updated_at = datetime.utcnow()
 
     await db.commit()
@@ -112,7 +127,6 @@ async def _sync_mentions(db: AsyncSession, entry: DiaryEntry):
 
 @router.get("/entry/{entry_id}/context")
 async def get_entry_context(entry_id: str, object_id: str, db: AsyncSession = Depends(get_db)):
-    """Return entry date plus a ~10-word context snippet around the @mention of object_id."""
     result = await db.execute(select(DiaryEntry).where(DiaryEntry.id == entry_id))
     entry = result.scalar_one_or_none()
     if not entry:
@@ -127,12 +141,10 @@ async def get_entry_context(entry_id: str, object_id: str, db: AsyncSession = De
 
 
 def _extract_context(content: str, object_id: str) -> str:
-    """Find @[Name](object_id) in content, return 5 words before + name + 5 words after."""
     import re
     pattern = re.compile(r'@\[([^\]]+)\]\(' + re.escape(object_id) + r'\)')
     m = pattern.search(content)
     if not m:
-        # Fallback: first 80 chars stripped of all mention syntax
         plain = re.sub(r'@\[([^\]]+)\]\([^)]+\)', r'@\1', content)
         return plain.strip()[:80]
 
@@ -140,7 +152,6 @@ def _extract_context(content: str, object_id: str) -> str:
     start = m.start()
     end   = m.end()
 
-    # Grab plain text before and after
     before_raw = re.sub(r'@\[([^\]]+)\]\([^)]+\)', r'@\1', content[:start]).strip()
     after_raw  = re.sub(r'@\[([^\]]+)\]\([^)]+\)', r'@\1', content[end:]).strip()
 

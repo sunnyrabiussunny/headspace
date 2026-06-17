@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from database import init_db
-from routers import diary, objects, search, export
+from routers import diary, objects, search, export, tags
 
 
 @asynccontextmanager
@@ -26,6 +26,7 @@ app.include_router(diary.router)
 app.include_router(objects.router)
 app.include_router(search.router)
 app.include_router(export.router)
+app.include_router(tags.router)
 
 
 @app.get("/api/health")

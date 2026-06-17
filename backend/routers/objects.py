@@ -1,18 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, or_
+from sqlalchemy import select, delete, or_, update
 from typing import List, Optional
 from datetime import datetime
 import uuid
+import re
 
 from database import get_db
-from models.db_models import KnowledgeObject, Mention
-from models.schemas import ObjectCreate, ObjectUpdate, ObjectOut, MentionOut
+from models.db_models import KnowledgeObject, Mention, DiaryEntry
+from models.schemas import ObjectCreate, ObjectUpdate, ObjectOut, MentionOut, MergeRequest
 from utils.mentions import extract_mentions
 
 router = APIRouter(prefix="/api/objects", tags=["objects"])
 
-VALID_TYPES = {"PERSON", "PLACE", "IDEA", "ORGANIZATION"}
+VALID_TYPES = {"PERSON", "PLACE", "IDEA", "ORGANIZATION", "MEDIA"}
 
 
 @router.get("/", response_model=List[ObjectOut])
@@ -40,7 +41,6 @@ async def search_objects(q: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/mention-search", response_model=List[ObjectOut])
 async def mention_search(q: str, db: AsyncSession = Depends(get_db)):
-    """Fast title-only search used by @mention popup."""
     result = await db.execute(
         select(KnowledgeObject)
         .where(KnowledgeObject.title.ilike(f"%{q}%"))
@@ -48,6 +48,55 @@ async def mention_search(q: str, db: AsyncSession = Depends(get_db)):
         .limit(8)
     )
     return result.scalars().all()
+
+
+@router.post("/merge", response_model=ObjectOut)
+async def merge_objects(payload: MergeRequest, db: AsyncSession = Depends(get_db)):
+    """Merge source into target: all mentions of source become mentions of target, then source is deleted."""
+    # Verify both exist
+    src_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == payload.source_id))
+    src = src_result.scalar_one_or_none()
+    if not src:
+        raise HTTPException(404, "Source object not found")
+
+    tgt_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == payload.target_id))
+    tgt = tgt_result.scalar_one_or_none()
+    if not tgt:
+        raise HTTPException(404, "Target object not found")
+
+    # Re-point all Mention rows that reference source → target
+    await db.execute(
+        update(Mention)
+        .where(Mention.object_id == payload.source_id)
+        .values(object_id=payload.target_id)
+    )
+
+    # Update diary entries: replace @[title](source_id) → @[target_title](target_id)
+    diary_result = await db.execute(select(DiaryEntry))
+    for entry in diary_result.scalars().all():
+        if entry.content and payload.source_id in entry.content:
+            new_content = re.sub(
+                r'@\[([^\]]+)\]\(' + re.escape(payload.source_id) + r'\)',
+                f'@[{tgt.title}]({tgt.id})',
+                entry.content
+            )
+            entry.content = new_content
+
+    # Merge tags (union)
+    merged_tags = list(set((tgt.tags or []) + (src.tags or [])))
+    tgt.tags = merged_tags
+
+    # Append source notes to target notes
+    if src.notes and src.notes.strip():
+        tgt.notes = (tgt.notes or "") + f"\n\n--- Merged from {src.title} ---\n{src.notes}"
+
+    # Delete source
+    await db.execute(delete(Mention).where(Mention.source_id == payload.source_id))
+    await db.execute(delete(KnowledgeObject).where(KnowledgeObject.id == payload.source_id))
+    tgt.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(tgt)
+    return tgt
 
 
 @router.get("/{object_id}", response_model=ObjectOut)
@@ -89,7 +138,6 @@ async def create_object(payload: ObjectCreate, db: AsyncSession = Depends(get_db
     db.add(obj)
     await db.commit()
     await db.refresh(obj)
-    # Sync mentions in notes
     await _sync_mentions(db, obj)
     return obj
 
@@ -119,7 +167,6 @@ async def update_object(
 
     await db.commit()
     await db.refresh(obj)
-    # Re-sync mentions whenever notes change
     await _sync_mentions(db, obj)
     return obj
 
@@ -134,21 +181,15 @@ async def delete_object(object_id: str, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
 
-# ── Helper ────────────────────────────────────────────────────────────────────
-
 async def _sync_mentions(db: AsyncSession, obj: KnowledgeObject):
-    """Re-parse @mentions in object notes and update mention records."""
-    # Remove old mentions from this object's notes as source
     await db.execute(
         delete(Mention).where(
             Mention.source_id == obj.id,
             Mention.source_type == "object"
         )
     )
-    # Parse and insert new mentions
     mentions = extract_mentions(obj.notes or "")
     for _name, target_id in mentions:
-        # Don't create self-referencing mention
         if target_id == obj.id:
             continue
         db.add(Mention(

@@ -1,10 +1,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { format, parseISO } from 'date-fns'
 import { updateEntry, mentionSearch, createObject } from '../../api'
 import styles from './DiaryEditor.module.css'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
-const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢' }
-const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION']
+const TAG_RE     = /#([a-zA-Z0-9_\-]+)/g
+const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢', MEDIA:'🎬' }
+const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION','MEDIA']
+
+const TEMPLATES = [
+  {
+    label: '📓 Daily Reflection',
+    text: `**Daily Reflection**\n\nWhat went well today:\n\nWhat I struggled with:\n\nNew learning today:\n\nGrateful for:\n`,
+  },
+  {
+    label: '📋 Meeting Notes',
+    text: `**Meeting Notes**\n\nDate: \nAttendees: \n\nAgenda:\n\nDiscussion:\n\nAction items:\n`,
+  },
+  {
+    label: '💡 Idea Capture',
+    text: `**Idea Capture**\n\nThe idea:\n\nWhy it matters:\n\nNext step:\n`,
+  },
+]
 
 function parseMd(md) {
   const segs = []; let last = 0
@@ -39,19 +56,32 @@ function reconcile(oldSegs, newDisplay) {
     ? [{ type:'text', val: newDisplay }]
     : out
 }
+function extractTags(text) {
+  const tags = new Set()
+  TAG_RE.lastIndex = 0
+  let m
+  while ((m = TAG_RE.exec(text)) !== null) {
+    tags.add(m[1].toLowerCase())
+  }
+  return [...tags]
+}
 
 export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
-  const segsRef      = useRef([])
-  const taRef        = useRef(null)
-  const saveTimer    = useRef(null)
-  const anchorRef       = useRef(-1)   // position of current @
-  const skipNextRef     = useRef(false) // skip ONE onChange after insert
-  const lastInsertEndRef = useRef(-1)  // cursor position right after last insert
+  const segsRef          = useRef([])
+  const taRef            = useRef(null)
+  const saveTimer        = useRef(null)
+  const anchorRef        = useRef(-1)
+  const skipNextRef      = useRef(false)
+  const lastInsertEndRef = useRef(-1)
 
   const [query,      setQuery]      = useState(null)
   const [results,    setResults]    = useState([])
   const [selIdx,     setSelIdx]     = useState(0)
   const [createType, setCreateType] = useState('PERSON')
+  const [tags,       setTags]       = useState(entry.tags || [])
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [showTimeEdit, setShowTimeEdit]   = useState(false)
+  const [timeValue, setTimeValue]         = useState('')
 
   // Mount
   useEffect(() => {
@@ -66,6 +96,16 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
       taRef.current.focus()
       taRef.current.setSelectionRange(d.length, d.length)
     }
+    setTags(entry.tags || [])
+    // Init time value from entry
+    if (entry.created_at) {
+      try {
+        const dt = typeof entry.created_at === 'string'
+          ? parseISO(entry.created_at)
+          : new Date(entry.created_at)
+        setTimeValue(format(dt, "yyyy-MM-dd'T'HH:mm"))
+      } catch {}
+    }
   }, [entry.id])
 
   // Fetch suggestions
@@ -75,11 +115,16 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   }, [query])
 
   // Save debounced
-  const save = useCallback(() => {
+  const save = useCallback((extraData = {}) => {
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
       try {
-        const saved = await updateEntry(entry.id, { content: toMd(segsRef.current) })
+        const content = toMd(segsRef.current)
+        const detectedTags = extractTags(toDisplay(segsRef.current))
+        // Merge: keep manual tags + detected ones
+        const allTags = [...new Set([...detectedTags])]
+        const saved = await updateEntry(entry.id, { content, tags: allTags, ...extraData })
+        setTags(saved.tags || [])
         onSave(saved)
       } catch {}
     }, 500)
@@ -88,11 +133,12 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   useEffect(() => {
     return () => {
       clearTimeout(saveTimer.current)
-      updateEntry(entry.id, { content: toMd(segsRef.current) }).catch(() => {})
+      const content = toMd(segsRef.current)
+      const detectedTags = extractTags(toDisplay(segsRef.current))
+      updateEntry(entry.id, { content, tags: [...new Set([...detectedTags])] }).catch(() => {})
     }
   }, [entry.id])
 
-  // onChange
   const handleChange = useCallback((e) => {
     const ta     = e.target
     const newVal = ta.value
@@ -100,7 +146,6 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     segsRef.current = reconcile(segsRef.current, newVal)
     save()
 
-    // Skip @ detection for one keystroke after an insertion (prevents space re-trigger)
     if (skipNextRef.current) {
       skipNextRef.current = false
       setQuery(null)
@@ -111,8 +156,6 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
       const frag = before.slice(atIdx + 1)
-      // Only open popup if this @ is AFTER the end of the last inserted token.
-      // atIdx < lastInsertEndRef means it's the @ we already consumed — ignore it.
       const alreadyUsed = lastInsertEndRef.current > 0 && atIdx < lastInsertEndRef.current
       if (!frag.includes('\n') && !alreadyUsed) {
         anchorRef.current = atIdx
@@ -123,7 +166,6 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     setQuery(null)
   }, [save])
 
-  // Insert selected object
   const doInsert = useCallback((obj) => {
     const ta = taRef.current
     if (!ta) return
@@ -147,9 +189,8 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     ta.setSelectionRange(newPos, newPos)
     ta.focus()
 
-    // Mark this @ as consumed — any @ at/before newPos is ignored until user types a new @
-    skipNextRef.current    = true
-    anchorRef.current      = -1
+    skipNextRef.current      = true
+    anchorRef.current        = -1
     lastInsertEndRef.current = newPos
     setQuery(null)
     setResults([])
@@ -163,6 +204,31 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
       doInsert(obj)
     } catch {}
   }, [doInsert])
+
+  const applyTemplate = useCallback((tpl) => {
+    const ta = taRef.current
+    if (!ta) return
+    const current = ta.value
+    const newVal = current ? current + '\n\n' + tpl.text : tpl.text
+    ta.value = newVal
+    segsRef.current = [{ type: 'text', val: newVal }]
+    ta.focus()
+    ta.setSelectionRange(newVal.length, newVal.length)
+    setShowTemplates(false)
+    save()
+  }, [save])
+
+  const handleTimeChange = useCallback(async () => {
+    if (!timeValue) return
+    try {
+      const saved = await updateEntry(entry.id, {
+        content: toMd(segsRef.current),
+        created_at: new Date(timeValue).toISOString()
+      })
+      onSave(saved)
+      setShowTimeEdit(false)
+    } catch {}
+  }, [entry.id, timeValue, onSave])
 
   const handleKeyDown = useCallback((e) => {
     if (query !== null) {
@@ -185,19 +251,71 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   return (
     <div className={styles.editor}>
       <div className={styles.header}>
-        <button className={styles.doneBtn} onClick={onClose}><CheckIcon /> Done</button>
-        <button className={styles.delBtn}  onClick={onDelete}><TrashIcon /></button>
+        <div className={styles.headerLeft}>
+          <button className={styles.doneBtn} onClick={onClose}><CheckIcon /> Done</button>
+          <button
+            className={styles.toolBtn}
+            onClick={() => setShowTemplates(v => !v)}
+            title="Insert template"
+          >
+            <TemplateIcon /> Templates
+          </button>
+          <button
+            className={styles.toolBtn}
+            onClick={() => setShowTimeEdit(v => !v)}
+            title="Edit time"
+          >
+            <ClockIcon />
+          </button>
+        </div>
+        <button className={styles.delBtn} onClick={onDelete}><TrashIcon /></button>
       </div>
+
+      {/* Template picker */}
+      {showTemplates && (
+        <div className={styles.templatePicker}>
+          {TEMPLATES.map((tpl, i) => (
+            <button key={i} className={styles.templateBtn} onClick={() => applyTemplate(tpl)}>
+              {tpl.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Time editor */}
+      {showTimeEdit && (
+        <div className={styles.timeEditor}>
+          <span className={styles.timeLabel}>Entry time:</span>
+          <input
+            type="datetime-local"
+            className={styles.timeInput}
+            value={timeValue}
+            onChange={e => setTimeValue(e.target.value)}
+          />
+          <button className={styles.timeSaveBtn} onClick={handleTimeChange}>Save</button>
+          <button className={styles.timeCancelBtn} onClick={() => setShowTimeEdit(false)}>Cancel</button>
+        </div>
+      )}
+
       <div className={styles.body}>
         <textarea
           ref={taRef}
           className={styles.ta}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="Start writing... (type @ to link an object)"
+          placeholder="Start writing... (type @ to link objects, # to add tags)"
           spellCheck={false}
           defaultValue=""
         />
+
+        {/* Live tag pills */}
+        {tags.length > 0 && (
+          <div className={styles.tagRow}>
+            {tags.map(t => <span key={t} className={styles.tagPill}>#{t}</span>)}
+          </div>
+        )}
+
+        {/* Mention popup */}
         {query !== null && (
           <div className={styles.popup}>
             <div className={styles.popupHint}>↑↓ navigate · Enter select · Esc close</div>
@@ -243,5 +361,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   )
 }
 
-function CheckIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> }
-function TrashIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg> }
+function CheckIcon()    { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> }
+function TrashIcon()    { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg> }
+function TemplateIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg> }
+function ClockIcon()    { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> }

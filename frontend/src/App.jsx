@@ -5,19 +5,23 @@ import ObjectsPage from './components/objects/ObjectsPage'
 import ObjectDetailPage from './components/objects/ObjectDetailPage'
 import ExportPage from './components/export/ExportPage'
 import GuidePage from './components/guide/GuidePage'
+import AllEntriesPage from './components/diary/AllEntriesPage'
+import TagsPage from './components/tags/TagsPage'
 import styles from './App.module.css'
 
 const NAV_ITEMS = [
-  { to: '/',          label: 'Diary',           icon: CalIcon },
-  { to: '/objects',   label: 'Objects',         icon: LayersIcon },
-  { to: '/export',    label: 'Export',          icon: DownloadIcon },
-  { to: '/guide',     label: 'Getting Started', icon: BookIcon },
+  { to: '/',           label: 'Diary',        icon: CalIcon },
+  { to: '/all',        label: 'All Entries',  icon: ListIcon },
+  { to: '/objects',    label: 'Objects',      icon: LayersIcon },
+  { to: '/tags',       label: 'Tags',         icon: TagIcon },
+  { to: '/export',     label: 'Export',       icon: DownloadIcon },
+  { to: '/guide',      label: 'Guide',        icon: BookIcon },
 ]
 
 export default function App() {
   return (
     <div className={styles.shell}>
-      {/* ── Sidebar (desktop) / Bottom nav (mobile) ── */}
+      {/* ── Sidebar (desktop) ── */}
       <nav className={styles.sidebar}>
         <div className={styles.logo}>
           <span className={styles.logoMark}>H</span>
@@ -37,7 +41,6 @@ export default function App() {
               <span>{label}</span>
             </NavLink>
           ))}
-
         </div>
       </nav>
 
@@ -62,8 +65,10 @@ export default function App() {
       <main className={styles.main}>
         <Routes>
           <Route path="/"                  element={<DiaryPage />} />
+          <Route path="/all"               element={<AllEntriesPage />} />
           <Route path="/objects"           element={<ObjectsPage />} />
           <Route path="/objects/:id"       element={<ObjectDetailPage />} />
+          <Route path="/tags"              element={<TagsPage />} />
           <Route path="/export"            element={<ExportPage />} />
           <Route path="/guide"             element={<GuidePage />} />
         </Routes>
@@ -72,7 +77,7 @@ export default function App() {
   )
 }
 
-/* ── Inline SVG icons (no dep needed) ── */
+/* ── Icons ── */
 function BookIcon({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -87,10 +92,26 @@ function CalIcon({ size = 20 }) {
     </svg>
   )
 }
+function ListIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+      <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+    </svg>
+  )
+}
 function LayersIcon({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+    </svg>
+  )
+}
+function TagIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+      <line x1="7" y1="7" x2="7.01" y2="7"/>
     </svg>
   )
 }

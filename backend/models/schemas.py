@@ -12,6 +12,7 @@ class DiaryEntryCreate(BaseModel):
 class DiaryEntryUpdate(BaseModel):
     content: Optional[str] = None
     tags: Optional[List[str]] = None
+    created_at: Optional[str] = None   # ISO string for time editing
 
 class DiaryEntryOut(BaseModel):
     id: str
@@ -76,3 +77,21 @@ class SearchResult(BaseModel):
     preview: str
     date: Optional[str] = None
     object_type: Optional[str] = None
+
+# ── Tags ────────────────────────────────────────────────────────────────────
+
+class TagInfo(BaseModel):
+    name: str
+    diary_count: int
+    object_count: int
+    total: int
+
+class TagRename(BaseModel):
+    old_name: str
+    new_name: str
+
+# ── Merge ───────────────────────────────────────────────────────────────────
+
+class MergeRequest(BaseModel):
+    source_id: str   # object to be deleted
+    target_id: str   # object to survive

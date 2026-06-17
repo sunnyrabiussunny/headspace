@@ -1,0 +1,197 @@
+.page {
+  padding: 20px 24px;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stat {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.statSep {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.divider {
+  height: 1px;
+  background: var(--divider);
+  margin-bottom: 16px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: var(--border-radius);
+  background: var(--bg-card);
+  min-height: 48px;
+  transition: background 0.15s;
+}
+
+.row:hover {
+  background: var(--bg-hover);
+}
+
+.tagInfo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tagName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-teal);
+}
+
+.tagMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dot {
+  opacity: 0.4;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.actionBtn {
+  padding: 5px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  transition: color 0.15s, background 0.15s;
+}
+
+.actionBtn:hover {
+  color: var(--text-primary);
+  background: var(--bg-selected);
+}
+
+.deleteBtn:hover {
+  color: var(--accent-red) !important;
+}
+
+.confirmRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.confirmText {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.confirmYes {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  background: var(--accent-red);
+  color: #fff;
+  font-weight: 600;
+}
+
+.cancelBtn {
+  font-size: 12px;
+  padding: 3px 8px;
+  color: var(--text-secondary);
+}
+
+.cancelBtn:hover {
+  color: var(--text-primary);
+}
+
+/* ── Rename inline ── */
+.renameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.tagHash {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-teal);
+}
+
+.renameInput {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-selected);
+  border: 1px solid var(--accent-teal);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  outline: none;
+}
+
+.saveBtn {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 5px;
+  background: var(--accent-green);
+  color: #000;
+  font-weight: 600;
+}
+
+.saveBtn:hover {
+  opacity: 0.85;
+}
+
+.empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 60px 0;
+  font-size: 14px;
+}
+
+.empty code {
+  background: var(--bg-card);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: var(--accent-teal);
+}

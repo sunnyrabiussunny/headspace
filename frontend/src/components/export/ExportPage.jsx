@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { getExportStatus, runBackup, downloadBackup, importBackup } from '../../api'
+import { getExportStatus, runBackup, downloadBackup, importBackup, importCapacities } from '../../api'
 import toast from 'react-hot-toast'
 import styles from './ExportPage.module.css'
 
 export default function ExportPage() {
-  const [status, setStatus]     = useState(null)
-  const [loading, setLoading]   = useState(false)
-  const fileRef                 = useRef(null)
+  const [status, setStatus]       = useState(null)
+  const [loading, setLoading]     = useState(false)
+  const fileRef                   = useRef(null)
+  const capFileRef                = useRef(null)
 
   useEffect(() => {
     getExportStatus().then(setStatus).catch(() => {})
@@ -37,6 +38,21 @@ export default function ExportPage() {
   const handleDownload = () => {
     downloadBackup()
     toast.success('Downloading backup zip...')
+  }
+
+  const handleCapacitiesImport = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLoading(true)
+    try {
+      const result = await importCapacities(file)
+      toast.success(`Capacities import: ${result.entries_imported} entries, ${result.objects_imported} objects`)
+      e.target.value = ''
+    } catch {
+      toast.error('Capacities import failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleImport = async (e) => {
@@ -106,9 +122,31 @@ export default function ExportPage() {
         </div>
       </div>
 
-      {/* Import card */}
+      {/* Capacities import card */}
       <div className={styles.card}>
-        <div className={styles.cardTitle}>Import</div>
+        <div className={styles.cardTitle}>Import from Capacities</div>
+        <p className={styles.cardDesc}>
+          Moved from Capacities? Upload your Capacities JSON export and your notes and objects will be mapped into Headspace automatically.
+        </p>
+        <input
+          type="file"
+          accept=".json"
+          ref={capFileRef}
+          style={{ display: 'none' }}
+          onChange={handleCapacitiesImport}
+        />
+        <button
+          className="btn btn-secondary"
+          onClick={() => capFileRef.current?.click()}
+          disabled={loading}
+        >
+          <UploadIcon /> Import Capacities JSON
+        </button>
+      </div>
+
+      {/* Headspace import card */}
+      <div className={styles.card}>
+        <div className={styles.cardTitle}>Import Headspace Backup</div>
         <p className={styles.cardDesc}>
           Upload a backup zip or a JSON file to restore entries and objects.
         </p>

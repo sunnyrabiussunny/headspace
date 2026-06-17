@@ -214,3 +214,90 @@
   font-family: var(--font);
 }
 .doneToolbarBtn:hover { background: rgba(61,191,160,.2); }
+
+/* ── Merge button ── */
+.mergeBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  transition: color 0.15s, background 0.15s;
+}
+.mergeBtn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* ── Merge modal ── */
+.modalDesc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.mergeSearchInput {
+  width: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  outline: none;
+}
+
+.mergeSearchInput:focus {
+  border-color: var(--accent-teal);
+}
+
+.mergeList {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 14px;
+}
+
+.mergeEmpty {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 20px 0;
+}
+
+.mergeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.mergeRow:hover {
+  background: var(--bg-hover);
+}
+
+.mergeRowActive {
+  background: color-mix(in srgb, var(--accent-teal) 15%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--accent-teal) 30%, transparent);
+}
+
+.mergeRowTitle {
+  font-size: 14px;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.mergeRowType {
+  font-size: 11px;
+  color: var(--text-muted);
+}
