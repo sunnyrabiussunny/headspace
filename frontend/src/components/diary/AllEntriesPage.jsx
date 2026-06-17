@@ -40,10 +40,13 @@ export default function AllEntriesPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [e, t] = await Promise.all([getAllEntries(activeTag), listTags()])
+      const e = await getAllEntries(activeTag)
       setEntries(e)
-      setTags(t)
     } catch { toast.error('Failed to load entries') }
+    try {
+      const t = await listTags()
+      setTags(t)
+    } catch { /* tags non-critical */ }
     finally { setLoading(false) }
   }, [activeTag])
 

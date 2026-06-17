@@ -26,7 +26,7 @@ export const mergeObjects        = (source_id, target_id) => api.post('/objects/
 
 // ── Tags ───────────────────────────────────────────────────────────────────
 
-export const listTags            = () => api.get('/tags/').then(r => r.data)
+export const listTags            = () => api.get('/tags').then(r => r.data)
 export const renameTag           = (old_name, new_name) => api.put('/tags/rename', { old_name, new_name }).then(r => r.data)
 export const deleteTag           = (name) => api.delete(`/tags/${encodeURIComponent(name)}`).then(r => r.data)
 

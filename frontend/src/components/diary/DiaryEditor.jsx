@@ -220,11 +220,24 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
 
   const handleTimeChange = useCallback(async () => {
     if (!timeValue) return
+    // Cancel any pending content-save debounce so it doesn't overwrite our time change
+    clearTimeout(saveTimer.current)
     try {
+      const content = toMd(segsRef.current)
+      const detectedTags = extractTags(toDisplay(segsRef.current))
       const saved = await updateEntry(entry.id, {
-        content: toMd(segsRef.current),
+        content,
+        tags: [...new Set([...detectedTags])],
         created_at: new Date(timeValue).toISOString()
       })
+      // Re-sync timeValue from response so display stays correct
+      if (saved.created_at) {
+        try {
+          const dt = parseISO(saved.created_at)
+          setTimeValue(format(dt, "yyyy-MM-dd'T'HH:mm"))
+        } catch {}
+      }
+      setTags(saved.tags || [])
       onSave(saved)
       setShowTimeEdit(false)
     } catch {}

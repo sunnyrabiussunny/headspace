@@ -3,14 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import styles from './GuidePage.module.css'
 
 const SECTIONS = [
-  { id: 'what',     label: 'What is Headspace?' },
-  { id: 'diary',    label: 'The Diary' },
-  { id: 'objects',  label: 'Objects' },
-  { id: 'linking',  label: 'Linking with @' },
-  { id: 'backlinks',label: 'Backlinks' },
-  { id: 'search',   label: 'Search' },
-  { id: 'export',   label: 'Export and Backup' },
-  { id: 'tips',     label: 'Tips and Workflow' },
+  { id: 'what',      label: 'What is Headspace?' },
+  { id: 'diary',     label: 'The Diary' },
+  { id: 'allentries',label: 'All Entries' },
+  { id: 'tags',      label: 'Tags' },
+  { id: 'objects',   label: 'Objects' },
+  { id: 'linking',   label: 'Linking with @' },
+  { id: 'backlinks', label: 'Backlinks' },
+  { id: 'search',    label: 'Search' },
+  { id: 'export',    label: 'Export and Backup' },
+  { id: 'tips',      label: 'Tips and Workflow' },
 ]
 
 export default function GuidePage() {
@@ -52,79 +54,111 @@ export default function GuidePage() {
 
         <Section id="what" title="What is Headspace?">
           <p>Headspace is a self-hosted personal knowledge management app and diary. All your data lives on your own server or computer — no third-party cloud, no vendor account required.</p>
-          <p>Everything is stored as plain Markdown and JSON files, so you can read, back up, and sync your notes with any tool you like, including Syncthing.</p>
-          <Callout icon="💡">Think of Headspace as your calm private studio — a place to write daily notes, connect ideas, and build a personal knowledge graph over time.</Callout>
+          <p>Everything is stored as plain Markdown and JSON files, so you can read, back up, and sync your notes with any tool you like.</p>
+          <Callout icon="💡">Think of Headspace as your calm private studio — a place to write daily notes, tag thoughts, connect ideas, and build a personal knowledge graph over time.</Callout>
           <FeatureGrid features={[
             { icon:'📅', title:'Diary', desc:'Write daily notes anchored to a calendar. Multiple entries per day, all on one page.' },
-            { icon:'👤', title:'Objects', desc:'People, places, ideas, and organizations — each with their own page, notes, and backlinks.' },
+            { icon:'📋', title:'All Entries', desc:'See every diary entry ever written in one chronological feed. Filter by tag.' },
+            { icon:'🏷️', title:'Tags', desc:'Type #tagname anywhere in a diary entry to tag it. Manage, rename, and delete tags globally.' },
+            { icon:'🧩', title:'Objects', desc:'People, places, ideas, organizations, and media — each with their own page, notes, and backlinks.' },
             { icon:'🔗', title:'Linking', desc:'Type @ anywhere to link diary entries to objects. Links are bidirectional — backlinks appear automatically.' },
             { icon:'🔍', title:'Search', desc:'Full-text search across everything — diary entries and all objects.' },
-            { icon:'💾', title:'Export', desc:'Auto-backup every 3 days as Markdown and JSON. Restore or sync with Syncthing anytime.' },
+            { icon:'💾', title:'Export', desc:'Auto-backup and manual export. Import from Capacities JSON exports too.' },
           ]} />
         </Section>
 
         <Section id="diary" title="The Diary">
-          <p>The Diary is the default home screen. It shows a <strong>week strip</strong> at the top — you can click any day to jump to it. The currently selected day shows all entries written on that date.</p>
+          <p>The Diary is the default home screen. It shows a <strong>week strip</strong> at the top — click any day to jump to it. The selected day shows all entries written on that date.</p>
           <StepList steps={[
-            { n:1, title:'Navigate to any date', desc:'Click a day in the week strip, use the left/right arrows to move week by week, or click the calendar icon at the top right of the week strip to jump to any date by picking from a full month view.' },
-            { n:2, title:'Add a Daily Note', desc:'Click the dashed "+ Daily Note" button at the bottom of the entries list. A new entry opens in editing mode with a teal border.' },
-            { n:3, title:'Write freely', desc:'Type anything. You can write multiple entries per day — each gets its own timestamp and can be edited independently. Click "Done" to close the editor and see the read-only card.' },
-            { n:4, title:'Link objects with @', desc:'While writing, type @ to open the object search popup. Results appear below the editor. Navigate with ↑↓, press Enter to select, or click with the mouse.' },
+            { n:1, title:'Navigate to any date', desc:'Click a day in the week strip, use the left/right arrows to move week by week, or click the calendar icon to open a full month picker.' },
+            { n:2, title:'Add a Daily Note', desc:'Click the dashed \"+ Daily Note\" button at the bottom of the entries list. A new entry opens in editing mode.' },
+            { n:3, title:'Use a template', desc:'Click the Templates button in the editor toolbar to insert a starter structure — Daily Reflection, Meeting Notes, or Idea Capture.' },
+            { n:4, title:'Edit the timestamp', desc:'Click the clock icon (🕐) in the editor toolbar to change when an entry was written. Useful when writing retroactively.' },
+            { n:5, title:'Write freely', desc:'Type anything. Link objects with @, add tags with #. Click Done to close the editor.' },
           ]} />
           <Callout icon="📅">
-            The green day name (e.g. "Wednesday") or red "Today" badge at the top of the content area always tells you which day you are viewing. The "Today" button in the week strip takes you back to today instantly.
+            The green day name at the top of the content area tells you which day you are viewing. The "Today" button in the week strip takes you back instantly.
+          </Callout>
+        </Section>
+
+        <Section id="allentries" title="All Entries">
+          <p>The <strong>All Entries</strong> page (second item in the sidebar) shows every diary entry you have ever written, sorted by date — newest first.</p>
+          <ul className={styles.list}>
+            <li>Entries are grouped by date with a green date header</li>
+            <li>Click any entry to open it in the inline editor</li>
+            <li>Tag filter chips appear at the top — click a tag to filter the entire feed to entries with that tag</li>
+            <li>The entry count is shown next to the page title</li>
+          </ul>
+          <Callout icon="📋">
+            All Entries is ideal for weekly reviews — scroll through the past week to see everything you wrote in one continuous feed.
+          </Callout>
+        </Section>
+
+        <Section id="tags" title="Tags">
+          <p>Tags let you categorise diary entries without creating a formal object. Type <code>#tagname</code> anywhere while writing — the tag is auto-detected when you save and appears as a teal pill below the editor.</p>
+          <StepList steps={[
+            { n:1, title:'Add a tag', desc:'While writing in any diary entry, type #yourtagname (no space after #). Tags are detected automatically on save.' },
+            { n:2, title:'Filter by tag', desc:'On the Diary page or All Entries page, click a tag pill on any entry to filter the view. On the All Entries page, tag filter chips appear at the top.' },
+            { n:3, title:'Manage tags', desc:'Go to the Tags page (tag icon in the sidebar). You will see every tag with a count of how many diary entries and objects use it.' },
+            { n:4, title:'Rename globally', desc:'Click the pencil icon next to any tag, type the new name, and press Enter. Every entry and object using the old name is updated instantly.' },
+            { n:5, title:'Delete globally', desc:'Click the trash icon next to any tag and confirm. The tag is removed from every entry and object.' },
+          ]} />
+          <Callout icon="🏷️">
+            Tags are lowercase and stored without the # symbol. Writing #Learning and #learning both create the same tag.
           </Callout>
         </Section>
 
         <Section id="objects" title="Objects">
-          <p>Objects are the building blocks of your knowledge graph. Every person, place, idea, or organization you want to remember gets its own object page.</p>
-          <p>There are four built-in object types:</p>
+          <p>Objects are the building blocks of your knowledge graph. Every person, place, idea, organization, or piece of media you want to remember gets its own object page.</p>
+          <p>There are five built-in object types:</p>
           <TypeGrid types={[
-            { emoji:'👤', name:'Person', desc:'Someone you know, have met, or want to remember — friends, colleagues, authors, historical figures.' },
-            { emoji:'📍', name:'Place',  desc:'Locations you have been to or want to visit — cities, restaurants, venues, countries.' },
-            { emoji:'💡', name:'Idea',   desc:'Concepts, projects, topics, or anything that doesn\'t fit neatly elsewhere.' },
+            { emoji:'👤', name:'Person',       desc:'Someone you know, have met, or want to remember — friends, colleagues, authors, historical figures.' },
+            { emoji:'📍', name:'Place',        desc:'Locations you have been to or want to visit — cities, restaurants, venues, countries.' },
+            { emoji:'💡', name:'Idea',         desc:'Concepts, projects, topics, or anything that doesn\'t fit neatly elsewhere.' },
             { emoji:'🏢', name:'Organization', desc:'Companies, institutions, communities, or groups.' },
+            { emoji:'🎬', name:'Media',        desc:'Books, films, podcasts, articles, albums — anything you are consuming or have consumed.' },
           ]} />
           <StepList steps={[
-            { n:1, title:'Create an object', desc:'Go to the Objects tab. Click "New" in the top right. Choose a type, enter a name, and click Create.' },
-            { n:2, title:'Write notes', desc:'On the object\'s page, type in the Notes area. You can also use @ here to link this object to others.' },
-            { n:3, title:'See where it\'s mentioned', desc:'Scroll to the Backlinks section at the bottom of the object page. Every diary entry or object note that mentions this object appears there as a clickable link with a context snippet.' },
+            { n:1, title:'Create an object', desc:'Go to the Objects tab. Click "New". Choose a type, enter a name, and click Create.' },
+            { n:2, title:'Write notes', desc:'On the object\'s page, click the notes area and type. You can use @ here to link this object to others.' },
+            { n:3, title:'Merge duplicates', desc:'Accidentally created "Riyan" and "Riyan Hoq" separately? Click the Merge button on either object\'s page, search for the target, and confirm. All backlinks transfer to the surviving object.' },
+            { n:4, title:'See where it\'s mentioned', desc:'Scroll to the Backlinks section at the bottom of the object page. Every diary entry or object note that mentions this object is listed there.' },
           ]} />
           <Callout icon="🔗">
-            You don\'t have to go to the Objects tab to create a new object. Type @NewName in any diary entry or object notes, and if it doesn\'t exist you\'ll see a "Create" option with a type picker right in the popup.
+            You don't have to go to the Objects tab to create a new object. Type @NewName in any diary entry or object notes and you'll see a "Create" option with a type picker — including Media — right in the popup.
           </Callout>
         </Section>
 
         <Section id="linking" title="Linking with @">
           <p>Linking is the most powerful feature in Headspace. Any diary entry or object note can reference any object using the @ symbol.</p>
           <CodeBlock>
-{`Today I had lunch with @Riyan Hoq Lappeenranta at @Cafe Aalto.
-We talked about the @Headspace project and next steps.`}
+{`Today I had lunch with @Riyan Hoq at @Cafe Aalto.
+We discussed @Headspace and the #product roadmap.`}
           </CodeBlock>
-          <p>When you type <code>@</code>, a search popup appears immediately below the text area. You can:</p>
+          <p>When you type <code>@</code>, a search popup appears immediately. You can:</p>
           <ul className={styles.list}>
-            <li>Type letters to filter — spaces are allowed, so "Riyan Ho" will find "Riyan Hoq Lappeenranta"</li>
+            <li>Type letters to filter — spaces are allowed, so "Riyan Ho" finds "Riyan Hoq"</li>
             <li>Use <kbd>↑</kbd> <kbd>↓</kbd> arrow keys to navigate results</li>
             <li>Press <kbd>Enter</kbd> to select the highlighted result</li>
             <li>Click any result with the mouse</li>
-            <li>Press <kbd>Esc</kbd> to close the popup without linking</li>
+            <li>Press <kbd>Esc</kbd> to close without linking</li>
           </ul>
-          <p>If no object matches, scroll to the "Create" section at the bottom of the popup. Pick a type (Person, Place, Idea, Organization) and click "Create and Link" — the new object is created and linked in one step.</p>
+          <p>If no object matches, scroll to the "Create" section at the bottom of the popup. Pick a type — Person, Place, Idea, Organization, or <strong>Media</strong> — and click "Create and Link".</p>
           <Callout icon="✅">
-            After selecting or creating an object, the @ token in your text is replaced by the object's name shown as a teal underlined link. Clicking that link navigates to the object's page.
+            After linking, the @ token becomes the object's name shown as a teal link. Clicking it navigates to the object's page.
           </Callout>
         </Section>
 
         <Section id="backlinks" title="Backlinks">
-          <p>Every time you mention an object with @, that object automatically records a backlink. Open any object page and scroll to the bottom — you will see every diary entry and object note that has ever mentioned it.</p>
+          <p>Every time you mention an object with @, that object automatically records a backlink. Open any object page and scroll to the bottom — every diary entry and object note that mentions it appears there.</p>
           <p>Each backlink shows:</p>
           <ul className={styles.list}>
-            <li><strong>Date</strong> — formatted as "8 June, 2026" for diary entries, or the object name for object-to-object links</li>
-            <li><strong>Context snippet</strong> — the five words before and after the mention, so you immediately know what the reference was about</li>
+            <li><strong>Date</strong> — formatted as "8 June 2026" for diary entries, or the object name for object-to-object links</li>
+            <li><strong>Context snippet</strong> — the five words before and after the mention so you know what the reference was about</li>
           </ul>
-          <p>Clicking a diary backlink jumps straight to that day in the Diary view. Clicking an object backlink opens that object's page.</p>
+          <p>Clicking a diary backlink jumps to that day in the Diary view. Clicking an object backlink opens that object's page.</p>
           <Callout icon="🕸️">
-            Backlinks are how Headspace turns your notes into a personal knowledge graph. The more you link, the more connections you discover when you revisit an object weeks later.
+            Backlinks turn your notes into a personal knowledge graph. The more you link, the more connections you discover when you revisit an object weeks later.
           </Callout>
         </Section>
 
@@ -140,30 +174,29 @@ We talked about the @Headspace project and next steps.`}
         </Section>
 
         <Section id="export" title="Export and Backup">
-          <p>Go to the <strong>Export</strong> tab in the left sidebar. Your data is always stored as open formats:</p>
-          <ul className={styles.list}>
-            <li><code>data/backups/diary/YYYY-MM-DD.md</code> — human-readable Markdown</li>
-            <li><code>data/backups/diary/UUID.json</code> — machine-readable for re-import</li>
-            <li><code>data/backups/objects/TYPE_Name.md</code> — object notes as Markdown</li>
-            <li><code>data/backups/objects/UUID.json</code> — object data for re-import</li>
-          </ul>
+          <p>Go to the <strong>Export</strong> tab in the left sidebar. Your data is always stored as open formats — Markdown and JSON files on the server.</p>
           <StepList steps={[
-            { n:1, title:'Auto-backup', desc:'Headspace automatically exports all data every 3 days, replacing the previous backup. No action needed.' },
+            { n:1, title:'Auto-backup', desc:'Headspace automatically exports all data every 3 days. No action needed.' },
             { n:2, title:'Manual export', desc:'Click "Export Now" to trigger an immediate backup to the backup folder on the server.' },
             { n:3, title:'Download zip', desc:'Click "Download Zip" to get a zip file of the entire backup — useful before migrating servers.' },
-            { n:4, title:'Import', desc:'Upload a backup zip or JSON file to restore data. Existing entries are updated, new ones are added.' },
-            { n:5, title:'Syncthing', desc:'Point Syncthing at the backup folder to keep a live copy on your phone, laptop, or any other device.' },
+            { n:4, title:'Import Headspace backup', desc:'Upload a previously downloaded backup zip or JSON file to restore data. Existing entries are updated, new ones are added.' },
+            { n:5, title:'Import from Capacities', desc:'Moving from Capacities? Upload your Capacities JSON export on the Export page. Daily notes become diary entries; objects (people, places, media, etc.) are mapped to the correct Headspace type automatically.' },
           ]} />
+          <Callout icon="💾">
+            Point Syncthing at the <code>data/</code> folder to keep a live copy on your phone, laptop, or any other device without any manual steps.
+          </Callout>
         </Section>
 
         <Section id="tips" title="Tips and Workflow">
           <TipGrid tips={[
             { icon:'🌅', title:'Daily review', desc:'Open Headspace each morning. Skim yesterday\'s entries. Write today\'s first note. It takes 2 minutes and builds a habit.' },
-            { icon:'🔗', title:'Link generously', desc:'When you mention a person, place, or idea — link it. You\'ll thank yourself when you open that object months later and see the full history.' },
+            { icon:'🔗', title:'Link generously', desc:'When you mention a person, place, or idea — link it with @. You\'ll thank yourself when you open that object months later and see the full history.' },
+            { icon:'🏷️', title:'Tag consistently', desc:'Use #tags for loose categories: #idea, #todo, #meeting, #learning. Then use the All Entries page filtered by tag for quick reviews.' },
             { icon:'📝', title:'Multiple entries per day', desc:'Don\'t edit the same entry all day. Add a new one each time you sit down. The timestamps tell the story.' },
-            { icon:'🏷️', title:'Object types as lenses', desc:'Use Persons for people, Places for locations, Ideas for projects and concepts, Organizations for companies and groups. These four cover almost everything.' },
-            { icon:'📱', title:'Mobile-friendly', desc:'Headspace works in the mobile browser too. The bottom navigation replaces the sidebar on small screens.' },
-            { icon:'🔒', title:'Your data, your rules', desc:'Everything lives on your server. No one else has access. Back up the data/ folder and you\'re fully protected.' },
+            { icon:'🎬', title:'Use Media objects', desc:'Create a Media object for every book, film, or podcast you engage with. Link to it from diary entries as you progress. The object page becomes your reading/watching log.' },
+            { icon:'🔀', title:'Merge duplicates early', desc:'If you spot two objects for the same person or place, merge them immediately. Use the Merge button on the object page to combine them cleanly.' },
+            { icon:'📱', title:'Mobile-friendly', desc:'Headspace works in the mobile browser. The bottom navigation replaces the sidebar on small screens.' },
+            { icon:'🔒', title:'Your data, your rules', desc:'Everything lives on your server. No one else has access. Back up the data/ folder regularly and you\'re fully protected.' },
           ]} />
         </Section>
 

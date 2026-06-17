@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -24,6 +24,10 @@ class DiaryEntryOut(BaseModel):
 
     class Config:
         from_attributes = True
+        # Serialize datetimes as UTC with Z suffix so frontend parseISO works correctly
+        json_encoders = {
+            datetime: lambda v: v.strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
+        }
 
 # ── KnowledgeObject ─────────────────────────────────────────────────────────
 
@@ -55,6 +59,9 @@ class ObjectOut(BaseModel):
 
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.strftime('%Y-%m-%dT%H:%M:%S') + 'Z'
+        }
 
 # ── Mention ─────────────────────────────────────────────────────────────────
 

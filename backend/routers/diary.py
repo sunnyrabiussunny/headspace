@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+from sqlalchemy.orm.attributes import flag_modified
 from typing import List, Optional
 from datetime import datetime
 import uuid
@@ -59,7 +60,7 @@ async def create_entry(payload: DiaryEntryCreate, db: AsyncSession = Depends(get
         id=str(uuid.uuid4()),
         date=payload.date,
         content=payload.content,
-        tags=payload.tags,
+        tags=list(payload.tags),
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -81,13 +82,24 @@ async def update_entry(
 
     if payload.content is not None:
         entry.content = payload.content
+
     if payload.tags is not None:
-        entry.tags = payload.tags
+        entry.tags = list(payload.tags)
+        flag_modified(entry, "tags")   # tell SQLAlchemy the JSON column changed
+
     if payload.created_at is not None:
         try:
-            entry.created_at = datetime.fromisoformat(payload.created_at.replace("Z", "+00:00"))
+            # Accept ISO string with or without Z/offset
+            ts = payload.created_at.replace("Z", "+00:00")
+            parsed = datetime.fromisoformat(ts)
+            # Store as naive UTC
+            if parsed.tzinfo is not None:
+                from datetime import timezone
+                parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+            entry.created_at = parsed
         except Exception:
-            pass
+            pass  # ignore malformed timestamps
+
     entry.updated_at = datetime.utcnow()
 
     await db.commit()

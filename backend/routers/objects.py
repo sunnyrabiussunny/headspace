@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, or_, update
+from sqlalchemy.orm.attributes import flag_modified
 from typing import List, Optional
 from datetime import datetime
 import uuid
@@ -53,7 +54,6 @@ async def mention_search(q: str, db: AsyncSession = Depends(get_db)):
 @router.post("/merge", response_model=ObjectOut)
 async def merge_objects(payload: MergeRequest, db: AsyncSession = Depends(get_db)):
     """Merge source into target: all mentions of source become mentions of target, then source is deleted."""
-    # Verify both exist
     src_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == payload.source_id))
     src = src_result.scalar_one_or_none()
     if not src:
@@ -85,6 +85,7 @@ async def merge_objects(payload: MergeRequest, db: AsyncSession = Depends(get_db
     # Merge tags (union)
     merged_tags = list(set((tgt.tags or []) + (src.tags or [])))
     tgt.tags = merged_tags
+    flag_modified(tgt, "tags")
 
     # Append source notes to target notes
     if src.notes and src.notes.strip():
@@ -122,16 +123,17 @@ async def get_mentions(object_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("/", response_model=ObjectOut, status_code=201)
 async def create_object(payload: ObjectCreate, db: AsyncSession = Depends(get_db)):
-    if payload.type.upper() not in VALID_TYPES:
-        raise HTTPException(400, f"Invalid type. Must be one of: {', '.join(VALID_TYPES)}")
+    obj_type = payload.type.upper().strip()
+    if obj_type not in VALID_TYPES:
+        raise HTTPException(400, f"Invalid type '{obj_type}'. Must be one of: {', '.join(sorted(VALID_TYPES))}")
     obj = KnowledgeObject(
         id=str(uuid.uuid4()),
-        type=payload.type.upper(),
+        type=obj_type,
         title=payload.title,
         description=payload.description,
         notes=payload.notes,
-        tags=payload.tags,
-        properties=payload.properties,
+        tags=list(payload.tags),
+        properties=dict(payload.properties),
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -160,9 +162,11 @@ async def update_object(
     if payload.notes is not None:
         obj.notes = payload.notes
     if payload.tags is not None:
-        obj.tags = payload.tags
+        obj.tags = list(payload.tags)
+        flag_modified(obj, "tags")
     if payload.properties is not None:
-        obj.properties = payload.properties
+        obj.properties = dict(payload.properties)
+        flag_modified(obj, "properties")
     obj.updated_at = datetime.utcnow()
 
     await db.commit()

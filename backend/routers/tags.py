@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import flag_modified
 from typing import List
-import re
 
 from database import get_db
 from models.db_models import DiaryEntry, KnowledgeObject
@@ -11,7 +11,7 @@ from models.schemas import TagInfo, TagRename
 router = APIRouter(prefix="/api/tags", tags=["tags"])
 
 
-@router.get("/", response_model=List[TagInfo])
+@router.get("", response_model=List[TagInfo])
 async def list_all_tags(db: AsyncSession = Depends(get_db)):
     """Return all tags used across diary entries and objects with counts."""
     tag_diary: dict[str, int] = {}
@@ -48,6 +48,7 @@ async def rename_tag(payload: TagRename, db: AsyncSession = Depends(get_db)):
     for entry in diary_result.scalars().all():
         if old in (entry.tags or []):
             entry.tags = [new if t == old else t for t in entry.tags]
+            flag_modified(entry, "tags")
             updated_entries += 1
 
     obj_result = await db.execute(select(KnowledgeObject))
@@ -55,6 +56,7 @@ async def rename_tag(payload: TagRename, db: AsyncSession = Depends(get_db)):
     for obj in obj_result.scalars().all():
         if old in (obj.tags or []):
             obj.tags = [new if t == old else t for t in obj.tags]
+            flag_modified(obj, "tags")
             updated_objects += 1
 
     await db.commit()
@@ -68,11 +70,13 @@ async def delete_tag(tag_name: str, db: AsyncSession = Depends(get_db)):
     for entry in diary_result.scalars().all():
         if tag_name in (entry.tags or []):
             entry.tags = [t for t in entry.tags if t != tag_name]
+            flag_modified(entry, "tags")
 
     obj_result = await db.execute(select(KnowledgeObject))
     for obj in obj_result.scalars().all():
         if tag_name in (obj.tags or []):
             obj.tags = [t for t in obj.tags if t != tag_name]
+            flag_modified(obj, "tags")
 
     await db.commit()
     return {"status": "ok"}
