@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from sqlalchemy.orm import flag_modified
 from typing import List, Optional
 from datetime import datetime
 import uuid
@@ -85,7 +84,6 @@ async def update_entry(
 
     if payload.tags is not None:
         entry.tags = list(payload.tags)
-        flag_modified(entry, "tags")   # tell SQLAlchemy the JSON column changed
 
     if payload.created_at is not None:
         try:

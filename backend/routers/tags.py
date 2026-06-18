@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import flag_modified
 from typing import List
 
 from database import get_db
@@ -48,16 +47,12 @@ async def rename_tag(payload: TagRename, db: AsyncSession = Depends(get_db)):
     for entry in diary_result.scalars().all():
         if old in (entry.tags or []):
             entry.tags = [new if t == old else t for t in entry.tags]
-            flag_modified(entry, "tags")
-            updated_entries += 1
 
     obj_result = await db.execute(select(KnowledgeObject))
     updated_objects = 0
     for obj in obj_result.scalars().all():
         if old in (obj.tags or []):
             obj.tags = [new if t == old else t for t in obj.tags]
-            flag_modified(obj, "tags")
-            updated_objects += 1
 
     await db.commit()
     return {"status": "ok", "updated_entries": updated_entries, "updated_objects": updated_objects}
@@ -70,13 +65,7 @@ async def delete_tag(tag_name: str, db: AsyncSession = Depends(get_db)):
     for entry in diary_result.scalars().all():
         if tag_name in (entry.tags or []):
             entry.tags = [t for t in entry.tags if t != tag_name]
-            flag_modified(entry, "tags")
-
-    obj_result = await db.execute(select(KnowledgeObject))
     for obj in obj_result.scalars().all():
         if tag_name in (obj.tags or []):
             obj.tags = [t for t in obj.tags if t != tag_name]
-            flag_modified(obj, "tags")
-
-    await db.commit()
     return {"status": "ok"}

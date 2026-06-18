@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, or_, update
-from sqlalchemy.orm import flag_modified
 from typing import List, Optional
 from datetime import datetime
 import uuid
@@ -85,9 +84,6 @@ async def merge_objects(payload: MergeRequest, db: AsyncSession = Depends(get_db
     # Merge tags (union)
     merged_tags = list(set((tgt.tags or []) + (src.tags or [])))
     tgt.tags = merged_tags
-    flag_modified(tgt, "tags")
-
-    # Append source notes to target notes
     if src.notes and src.notes.strip():
         tgt.notes = (tgt.notes or "") + f"\n\n--- Merged from {src.title} ---\n{src.notes}"
 
@@ -163,11 +159,7 @@ async def update_object(
         obj.notes = payload.notes
     if payload.tags is not None:
         obj.tags = list(payload.tags)
-        flag_modified(obj, "tags")
-    if payload.properties is not None:
         obj.properties = dict(payload.properties)
-        flag_modified(obj, "properties")
-    obj.updated_at = datetime.utcnow()
 
     await db.commit()
     await db.refresh(obj)
