@@ -366,8 +366,25 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         return meta, body.strip()
 
     def _tags_from_text(text: str) -> list:
-        """Extract #hashtags from text."""
-        return [m.lstrip('#').lower() for m in _re.findall(r'#([a-zA-Z0-9_\-]+)', text)]
+        """
+        Extract inline #hashtags from text.
+        Excludes markdown headings (# at start of line) and
+        junk tags from heading anchors (containing -- or starting with -).
+        """
+        tags = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            # Skip markdown heading lines entirely
+            if stripped.startswith('#'):
+                continue
+            # Find inline hashtags: #word not at line start
+            for m in _re.finditer(r'(?<![#\w])#([a-zA-Z][a-zA-Z0-9_]{0,39})', line):
+                tag = m.group(1).lower()
+                # Skip tags that look like heading anchors (contain --)
+                if '--' in tag or tag.startswith('-'):
+                    continue
+                tags.append(tag)
+        return list(set(tags))
 
     async def _convert_links(text: str, folder_context: str = '') -> str:
         """

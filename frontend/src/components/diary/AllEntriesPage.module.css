@@ -1,7 +1,8 @@
 .page {
-  padding: 20px 24px;
-  max-width: 760px;
+  padding: 20px 24px 40px;
+  max-width: 900px;
   margin: 0 auto;
+  min-height: 0;
 }
 
 .header {
@@ -22,6 +23,7 @@
   color: var(--text-muted);
 }
 
+/* ── Tag filter chips ── */
 .tagChips {
   display: flex;
   flex-wrap: wrap;
@@ -30,6 +32,9 @@
 }
 
 .tagChip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   padding: 4px 10px;
   border-radius: 20px;
   font-size: 12px;
@@ -52,117 +57,186 @@
 }
 
 .tagCount {
-  opacity: 0.6;
-  margin-left: 3px;
+  opacity: 0.55;
   font-size: 11px;
 }
 
 .divider {
   height: 1px;
   background: var(--divider);
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
+/* ── Feed ── */
 .feed {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 32px;
 }
 
+/* ── Date group ── */
 .dateGroup {}
 
 .dateLabel {
-  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .dateBadge {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--accent-green);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 
-.entryCard {
+.dateDayCount {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+/* ── Card grid ── */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+/* ── Individual card ── */
+.card {
   background: var(--bg-card);
   border-radius: var(--border-radius);
-  padding: 14px 16px;
-  margin-bottom: 8px;
+  padding: 12px 14px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, transform 0.1s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 110px;
+  max-height: 180px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid transparent;
 }
 
-.entryCard:hover {
+.card:hover {
   background: var(--bg-hover);
+  border-color: var(--divider);
+  transform: translateY(-1px);
 }
 
-.entryMeta {
+.cardHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
 }
 
-.entryTime {
-  font-size: 12px;
+.cardTime {
+  font-size: 11px;
   color: var(--text-muted);
+  font-weight: 500;
 }
 
-.delBtn {
+.cardDel {
   color: var(--text-muted);
-  padding: 2px 4px;
+  padding: 2px 3px;
   border-radius: 4px;
-  transition: color 0.15s;
   opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
 }
 
-.entryCard:hover .delBtn {
+.card:hover .cardDel {
   opacity: 1;
 }
 
-.delBtn:hover {
+.cardDel:hover {
   color: var(--accent-red);
 }
 
-.entryContent {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--text-primary);
-  white-space: pre-wrap;
+.cardPreview {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  flex: 1;
   word-break: break-word;
 }
 
-.entryTags {
+.emptyNote {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Fade out bottom of card if text overflows */
+.card::after {
+  content: '';
+  position: absolute;
+  bottom: 32px;
+  left: 0;
+  right: 0;
+  height: 28px;
+  background: linear-gradient(to bottom, transparent, var(--bg-card));
+  pointer-events: none;
+}
+
+.card:hover::after {
+  background: linear-gradient(to bottom, transparent, var(--bg-hover));
+}
+
+.cardTags {
   display: flex;
   flex-wrap: wrap;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.cardTag {
+  font-size: 11px;
+  color: var(--accent-teal);
+  font-weight: 500;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.cardTag:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* ── Editor view ── */
+.editorWrap {
+  padding: 20px 24px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.backBtn {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
   gap: 6px;
-  margin-top: 8px;
+  padding: 5px 0;
+  transition: color 0.15s;
 }
 
-.tagPill {
-  font-size: 12px;
-  color: var(--accent-teal);
-  font-weight: 500;
-  cursor: pointer;
+.backBtn:hover {
+  color: var(--text-primary);
 }
 
-.tagPill:hover {
-  text-decoration: underline;
-}
-
-.mentionLink {
-  color: var(--accent-teal);
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.mentionLink:hover {
-  text-decoration: underline;
-}
-
+/* ── Empty state ── */
 .empty {
   color: var(--text-muted);
   text-align: center;
-  padding: 60px 0;
+  padding: 80px 0;
   font-size: 14px;
 }
