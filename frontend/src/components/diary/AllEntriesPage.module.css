@@ -1,15 +1,14 @@
 .page {
-  padding: 20px 24px 40px;
-  max-width: 900px;
+  padding: 20px 24px 60px;
+  max-width: 960px;
   margin: 0 auto;
-  min-height: 0;
 }
 
 .header {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
 .title {
@@ -23,60 +22,14 @@
   color: var(--text-muted);
 }
 
-/* ── Tag filter chips ── */
-.tagChips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.tagChip {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.tagChip:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.tagChipActive {
-  background: color-mix(in srgb, var(--accent-teal) 15%, transparent);
-  color: var(--accent-teal);
-  border: 1px solid color-mix(in srgb, var(--accent-teal) 30%, transparent);
-}
-
-.tagCount {
-  opacity: 0.55;
-  font-size: 11px;
-}
-
-.divider {
-  height: 1px;
-  background: var(--divider);
-  margin-bottom: 24px;
-}
-
 /* ── Feed ── */
 .feed {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 36px;
 }
 
 /* ── Date group ── */
-.dateGroup {}
-
 .dateLabel {
   display: flex;
   align-items: center;
@@ -85,43 +38,43 @@
 }
 
 .dateBadge {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--accent-green);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
 .dateDayCount {
   font-size: 11px;
   color: var(--text-muted);
   background: var(--bg-card);
-  padding: 1px 7px;
+  padding: 1px 8px;
   border-radius: 10px;
 }
 
 /* ── Card grid ── */
 .cardGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
 }
 
 /* ── Individual card ── */
 .card {
   background: var(--bg-card);
   border-radius: var(--border-radius);
-  padding: 12px 14px;
+  padding: 12px 14px 10px;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  border: 1px solid transparent;
+  min-height: 120px;
+  max-height: 160px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 110px;
-  max-height: 180px;
-  overflow: hidden;
+  gap: 6px;
   position: relative;
-  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s, transform 0.1s;
 }
 
 .card:hover {
@@ -134,12 +87,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .cardTime {
   font-size: 11px;
   color: var(--text-muted);
-  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 
 .cardDel {
@@ -147,7 +101,8 @@
   padding: 2px 3px;
   border-radius: 4px;
   opacity: 0;
-  transition: opacity 0.15s, color 0.15s;
+  transition: opacity 0.12s, color 0.12s;
+  flex-shrink: 0;
 }
 
 .card:hover .cardDel {
@@ -155,9 +110,10 @@
 }
 
 .cardDel:hover {
-  color: var(--accent-red);
+  color: var(--accent-red, #e05252);
 }
 
+/* Text preview — clamp to ~5 lines */
 .cardPreview {
   font-size: 13px;
   line-height: 1.55;
@@ -168,6 +124,7 @@
   -webkit-box-orient: vertical;
   flex: 1;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .emptyNote {
@@ -175,45 +132,26 @@
   font-style: italic;
 }
 
-/* Fade out bottom of card if text overflows */
+/* Fade bottom so text doesn't hard-clip */
 .card::after {
   content: '';
   position: absolute;
-  bottom: 32px;
+  bottom: 0;
   left: 0;
   right: 0;
-  height: 28px;
-  background: linear-gradient(to bottom, transparent, var(--bg-card));
+  height: 32px;
+  background: linear-gradient(transparent, var(--bg-card));
   pointer-events: none;
+  border-radius: 0 0 var(--border-radius) var(--border-radius);
 }
 
 .card:hover::after {
-  background: linear-gradient(to bottom, transparent, var(--bg-hover));
-}
-
-.cardTags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: auto;
-}
-
-.cardTag {
-  font-size: 11px;
-  color: var(--accent-teal);
-  font-weight: 500;
-  cursor: pointer;
-  opacity: 0.8;
-}
-
-.cardTag:hover {
-  opacity: 1;
-  text-decoration: underline;
+  background: linear-gradient(transparent, var(--bg-hover));
 }
 
 /* ── Editor view ── */
 .editorWrap {
-  padding: 20px 24px;
+  padding: 16px 24px;
   max-width: 760px;
   margin: 0 auto;
 }
@@ -222,21 +160,27 @@
   font-size: 13px;
   color: var(--text-secondary);
   margin-bottom: 16px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 0;
-  transition: color 0.15s;
+  transition: color 0.12s;
 }
 
 .backBtn:hover {
   color: var(--text-primary);
 }
 
-/* ── Empty state ── */
+/* ── Empty ── */
 .empty {
   color: var(--text-muted);
   text-align: center;
   padding: 80px 0;
   font-size: 14px;
+}
+
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .page { padding: 16px 14px 80px; }
+  .cardGrid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .card { min-height: 100px; max-height: 140px; }
 }

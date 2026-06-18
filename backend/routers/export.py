@@ -637,3 +637,41 @@ async def cleanup_date_objects(db: AsyncSession = Depends(get_db)):
             deleted += 1
     await db.commit()
     return {"status": "ok", "deleted_date_objects": deleted}
+
+
+@router.delete("/cleanup-junk-tags")
+async def cleanup_junk_tags(db: AsyncSession = Depends(get_db)):
+    """
+    Remove junk tags that were created from Capacities markdown heading anchors.
+    These look like: #-artemis---llm, #-background, #-career-snapshot etc.
+    Rule: delete any tag that starts with '-' OR contains '--' OR is longer than 40 chars.
+    """
+    import re as _re
+    JUNK = _re.compile(r'^-|--|[^a-zA-Z0-9_\-]|^.{41,}')
+
+    diary_result = await db.execute(select(DiaryEntry))
+    cleaned_entries = 0
+    for entry in diary_result.scalars().all():
+        if not entry.tags:
+            continue
+        clean = [t for t in entry.tags if not JUNK.search(t)]
+        if len(clean) != len(entry.tags):
+            entry.tags = clean
+            cleaned_entries += 1
+
+    obj_result = await db.execute(select(KnowledgeObject))
+    cleaned_objects = 0
+    for obj in obj_result.scalars().all():
+        if not obj.tags:
+            continue
+        clean = [t for t in obj.tags if not JUNK.search(t)]
+        if len(clean) != len(obj.tags):
+            obj.tags = clean
+            cleaned_objects += 1
+
+    await db.commit()
+    return {
+        "status": "ok",
+        "cleaned_entries": cleaned_entries,
+        "cleaned_objects": cleaned_objects,
+    }

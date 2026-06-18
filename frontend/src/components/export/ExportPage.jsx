@@ -56,6 +56,19 @@ export default function ExportPage() {
     }
   }
 
+  const handleCleanupJunkTags = async () => {
+    if (!window.confirm('This will delete all junk tags imported from Capacities markdown headings (tags starting with - or containing --). Continue?')) return
+    setLoading(true)
+    try {
+      const result = await axios.delete('/api/export/cleanup-junk-tags')
+      toast.success(`Cleaned ${result.data.cleaned_entries} entries and ${result.data.cleaned_objects} objects`)
+    } catch {
+      toast.error('Cleanup failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleCleanupDateObjects = async () => {
     if (!window.confirm('This will delete all objects whose title is a date (YYYY-MM-DD) — the ones wrongly imported as objects instead of diary entries. Continue?')) return
     setLoading(true)
@@ -163,6 +176,21 @@ export default function ExportPage() {
           disabled={loading}
         >
           <UploadIcon /> Upload Capacities Export
+        </button>
+      </div>
+
+      {/* Cleanup junk tags */}
+      <div className={styles.card}>
+        <div className={styles.cardTitle}>Clean Up Junk Tags</div>
+        <p className={styles.cardDesc}>
+          If your Tags page shows garbage like <code>#-artemis---llm</code> or <code>#-background</code> from a Capacities import, click below to remove them all from the database permanently.
+        </p>
+        <button
+          className="btn btn-danger"
+          onClick={handleCleanupJunkTags}
+          disabled={loading}
+        >
+          🧹 Remove Junk Tags
         </button>
       </div>
 
