@@ -301,3 +301,147 @@
   font-size: 11px;
   color: var(--text-muted);
 }
+
+/* ── Edit meta button ── */
+.editMetaBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  margin-left: 8px;
+  transition: color 0.15s, background 0.15s;
+}
+.editMetaBtn:hover {
+  color: var(--text-primary);
+  background: var(--bg-selected);
+}
+
+/* ── Meta editor panel ── */
+.metaEditor {
+  background: var(--bg-secondary);
+  border: 1px solid var(--divider);
+  border-radius: var(--border-radius);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.metaEditorRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.metaLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.typeChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.typeChip {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s;
+}
+.typeChip:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.typeChipActive {
+  background: color-mix(in srgb, var(--accent-teal) 15%, transparent);
+  color: var(--accent-teal);
+  border: 1px solid color-mix(in srgb, var(--accent-teal) 30%, transparent);
+}
+.metaInput {
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  outline: none;
+  width: 100%;
+}
+.metaInput:focus {
+  border-color: var(--accent-teal);
+}
+.metaEditorActions {
+  display: flex;
+  gap: 8px;
+}
+.metaSaveBtn {
+  font-size: 12px;
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-green);
+  color: #000;
+  font-weight: 600;
+}
+.metaSaveBtn:hover { opacity: 0.85; }
+.metaCancelBtn {
+  font-size: 12px;
+  padding: 5px 10px;
+  color: var(--text-secondary);
+}
+.metaCancelBtn:hover { color: var(--text-primary); }
+
+/* ── Description display row ── */
+.descRow {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.descRow:hover {
+  color: var(--text-primary);
+}
+
+/* ── URL row for weblink objects ── */
+.urlRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--divider);
+  margin-bottom: 8px;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+  overflow: hidden;
+}
+.urlRow:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-teal);
+}
+.urlRow svg {
+  color: var(--accent-teal);
+  flex-shrink: 0;
+}
+.urlRow span:first-of-type {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-teal);
+  flex-shrink: 0;
+}
+.urlFull {
+  font-size: 11px;
+  color: var(--text-muted) !important;
+  font-weight: 400 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
