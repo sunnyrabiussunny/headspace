@@ -53,7 +53,15 @@ export default function AllEntriesPage() {
   useEffect(() => { load() }, [load])
 
   const handleSaved = (updated) => {
-    setEntries(prev => prev.map(e => e.id === updated.id ? updated : e))
+    // Find the old entry to detect if the date changed
+    const old = entries.find(e => e.id === updated.id)
+    if (old && old.date !== updated.date) {
+      // Date changed — reload entire list so entry appears under the correct date group
+      load()
+      setEditingId(null)
+    } else {
+      setEntries(prev => prev.map(e => e.id === updated.id ? updated : e))
+    }
   }
 
   const handleDelete = async (id) => {

@@ -228,7 +228,10 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
       const saved = await updateEntry(entry.id, {
         content,
         tags: [...new Set([...detectedTags])],
-        created_at: new Date(timeValue).toISOString()
+        // Send local datetime string directly so backend can extract the correct
+        // local date (YYYY-MM-DD). Converting to UTC first risks shifting the day
+        // for entries created near midnight in the user's timezone.
+        created_at: timeValue  // "YYYY-MM-DDTHH:mm" local time
       })
       // Re-sync timeValue from response so display stays correct
       if (saved.created_at) {

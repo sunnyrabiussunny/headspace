@@ -98,8 +98,17 @@ export default function DiaryPage() {
   }, [editingId])
 
   const handleSaved = useCallback((updated) => {
-    setEntries(prev => prev.map(e => e.id === updated.id ? updated : e))
-  }, [])
+    const currentDate = format(selectedDate, 'yyyy-MM-dd')
+    if (updated.date && updated.date !== currentDate) {
+      // Entry moved to a different day — remove it from this view and
+      // refresh the dates-with-entries set so the dot appears on the new day
+      setEntries(prev => prev.filter(e => e.id !== updated.id))
+      setEditingId(null)
+      getDatesWithEntries().then(d => setDatesWithEntries(new Set(d))).catch(() => {})
+    } else {
+      setEntries(prev => prev.map(e => e.id === updated.id ? updated : e))
+    }
+  }, [selectedDate])
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const isSelectedToday = isToday(selectedDate)

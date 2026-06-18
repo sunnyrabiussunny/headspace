@@ -89,13 +89,19 @@ async def update_entry(
 
     if payload.created_at is not None:
         try:
-            # Accept ISO string with or without Z/offset
-            ts = payload.created_at.replace("Z", "+00:00")
+            raw = payload.created_at
+            # Extract YYYY-MM-DD from the local datetime string the frontend sends
+            # e.g. "2024-06-15T09:30:00.000Z" or "2024-06-15T12:30"
+            # The date part always reflects what the user picked in their local time
+            date_part = raw[:10]
+            if len(date_part) == 10 and date_part[4] == "-" and date_part[7] == "-":
+                entry.date = date_part
+            # Parse to UTC for storage
+            ts = raw.replace("Z", "+00:00")
             parsed = datetime.fromisoformat(ts)
-            # Store as naive UTC
             if parsed.tzinfo is not None:
-                from datetime import timezone
-                parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+                from datetime import timezone as _tz
+                parsed = parsed.astimezone(_tz.utc).replace(tzinfo=None)
             entry.created_at = parsed
         except Exception:
             pass  # ignore malformed timestamps
