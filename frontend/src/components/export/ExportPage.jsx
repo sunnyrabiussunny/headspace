@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { getExportStatus, runBackup, downloadBackup, importBackup, importCapacities } from '../../api'
+import axios from 'axios'
 import toast from 'react-hot-toast'
 import styles from './ExportPage.module.css'
 
@@ -50,6 +51,19 @@ export default function ExportPage() {
       e.target.value = ''
     } catch {
       toast.error('Capacities import failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCleanupDateObjects = async () => {
+    if (!window.confirm('This will delete all objects whose title is a date (YYYY-MM-DD) — the ones wrongly imported as objects instead of diary entries. Continue?')) return
+    setLoading(true)
+    try {
+      const result = await axios.delete('/api/export/cleanup-date-objects')
+      toast.success(`Cleaned up ${result.data.deleted_date_objects} wrongly-imported date objects`)
+    } catch {
+      toast.error('Cleanup failed')
     } finally {
       setLoading(false)
     }
@@ -149,6 +163,21 @@ export default function ExportPage() {
           disabled={loading}
         >
           <UploadIcon /> Upload Capacities Export
+        </button>
+      </div>
+
+      {/* Cleanup wrongly-imported date objects */}
+      <div className={styles.card}>
+        <div className={styles.cardTitle}>Fix Wrongly Imported Capacities Entries</div>
+        <p className={styles.cardDesc}>
+          If your calendar entries were imported as objects (titled "2024-06-15" etc.) instead of diary entries, click below to delete them all at once. Then re-upload your Capacities export — the import now correctly detects date-named files as diary entries.
+        </p>
+        <button
+          className="btn btn-danger"
+          onClick={handleCleanupDateObjects}
+          disabled={loading}
+        >
+          🗑️ Delete All Date-Named Objects
         </button>
       </div>
 

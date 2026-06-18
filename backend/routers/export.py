@@ -313,37 +313,62 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         return [t.strip().lstrip('#') for t in raw.split(',') if t.strip()]
 
     def _folder_to_type(folder: str) -> str:
-        folder_lower = folder.lower().strip().rstrip('s')  # rough deplural
+        import re as _re
+        f = folder.lower().strip()
+        # Explicit diary folder names used by Capacities
+        diary_folders = {
+            'daily notes', 'dailynotes', 'daily note', 'dailynote',
+            'journal', 'journals', 'diary', 'diaries', 'calendar',
+            'days', 'day', 'entries',
+        }
+        if f in diary_folders:
+            return 'DIARY'
+        # Depluralize and check again
+        f_deplural = f.rstrip('s')
+        if f_deplural in diary_folders:
+            return 'DIARY'
         mapping = {
-            'daily note':  'DIARY',
-            'journal':     'DIARY',
             'person':      'PERSON',
             'people':      'PERSON',
             'contact':     'PERSON',
+            'contacts':    'PERSON',
             'place':       'PLACE',
+            'places':      'PLACE',
             'location':    'PLACE',
+            'locations':   'PLACE',
             'book':        'MEDIA',
+            'books':       'MEDIA',
             'movie':       'MEDIA',
+            'movies':      'MEDIA',
             'film':        'MEDIA',
+            'films':       'MEDIA',
             'media':       'MEDIA',
             'podcast':     'MEDIA',
+            'podcasts':    'MEDIA',
             'article':     'MEDIA',
+            'articles':    'MEDIA',
             'video':       'MEDIA',
+            'videos':      'MEDIA',
             'album':       'MEDIA',
+            'albums':      'MEDIA',
             'organization':'ORGANIZATION',
+            'organizations':'ORGANIZATION',
             'company':     'ORGANIZATION',
+            'companies':   'ORGANIZATION',
             'team':        'ORGANIZATION',
+            'teams':       'ORGANIZATION',
             'idea':        'IDEA',
+            'ideas':       'IDEA',
             'concept':     'IDEA',
+            'concepts':    'IDEA',
             'tag':         'IDEA',
+            'tags':        'IDEA',
             'note':        'IDEA',
+            'notes':       'IDEA',
             'project':     'IDEA',
+            'projects':    'IDEA',
         }
-        # Try exact then depluralled
-        for key in (folder.lower().strip(), folder_lower):
-            if key in mapping:
-                return mapping[key]
-        return 'IDEA'
+        return mapping.get(f, mapping.get(f_deplural, 'IDEA'))
 
     def _date_from_filename(name: str):
         """Extract YYYY-MM-DD from filenames like 2024-06-15.md or 2024-06-15 Monday.md"""
@@ -352,27 +377,33 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         return m.group(1) if m else None
 
     async def _process_md_file(folder: str, filename: str, text: str):
-        obj_type = _folder_to_type(folder)
         meta, body = _parse_md(text)
         tags = _tags_from_meta(meta)
 
-        if obj_type == 'DIARY':
-            date_str = (
-                _date_from_filename(filename)
-                or meta.get('date', '')[:10]
-                or meta.get('day', '')[:10]
-            )
-            if not date_str or len(date_str) < 10:
-                return
+        # Priority 1: filename looks like a date → always a diary entry
+        # Capacities names daily note files "2024-06-15.md" or "2024-06-15 Monday.md"
+        date_from_file = _date_from_filename(filename)
+        date_from_meta = meta.get('date', '')[:10] or meta.get('day', '')[:10]
+        date_str = date_from_file or date_from_meta
+
+        # Priority 2: folder name says diary
+        folder_type = _folder_to_type(folder)
+
+        if date_str and len(date_str) == 10:
+            # Has a valid date → treat as diary entry regardless of folder
             await _upsert_entry(date_str, body, tags)
+        elif folder_type == 'DIARY':
+            # Folder says diary but no date found — skip (can't place it)
+            return
         else:
+            # It's a knowledge object
             title = (
                 meta.get('title')
                 or meta.get('name')
                 or filename.replace('.md', '').strip()
             )
             description = meta.get('description', '')
-            await _upsert_object(obj_type, title, description, body, tags)
+            await _upsert_object(folder_type, title, description, body, tags)
 
     # ── Process input ───────────────────────────────────────────────────────
 
@@ -430,3 +461,24 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         "objects_imported": objects_count,
     }
 
+
+
+@router.delete("/cleanup-date-objects")
+async def cleanup_date_objects(db: AsyncSession = Depends(get_db)):
+    """
+    One-shot cleanup: delete all KnowledgeObjects whose title is a date
+    (YYYY-MM-DD format) — these were wrongly imported as objects instead
+    of diary entries during a bad Capacities import run.
+    """
+    import re as _re
+    DATE_PAT = _re.compile(r'^\d{4}-\d{2}-\d{2}')
+    result = await db.execute(select(KnowledgeObject))
+    deleted = 0
+    for obj in result.scalars().all():
+        if obj.title and DATE_PAT.match(obj.title.strip()):
+            await db.execute(delete(Mention).where(Mention.object_id == obj.id))
+            await db.execute(delete(Mention).where(Mention.source_id == obj.id))
+            await db.execute(delete(KnowledgeObject).where(KnowledgeObject.id == obj.id))
+            deleted += 1
+    await db.commit()
+    return {"status": "ok", "deleted_date_objects": deleted}
