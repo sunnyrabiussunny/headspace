@@ -253,6 +253,7 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
 
     async def _get_or_create_object(title: str, obj_type: str, properties: dict = None, description: str = "") -> str:
         """Return id of existing object with this title, or create and return new one."""
+        nonlocal objects_count
         key = title.lower().strip()
         if key in obj_cache:
             # Update URL if we now have one and it wasn't set before
@@ -275,7 +276,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
             updated_at=datetime.utcnow(),
         ))
         obj_cache[key] = oid
-        nonlocal objects_count
         objects_count += 1
         return oid
 
@@ -458,6 +458,7 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
     )
 
     async def _process_md_file(folder: str, filename: str, text: str):
+        nonlocal entries_count, objects_count
         meta, body = _parse_yaml_front_matter(text)
         date_from_file = _date_from_filename(filename)
         date_from_meta = meta.get('date', '')[:10] or meta.get('day', '')[:10]
@@ -492,7 +493,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
                     created_at=ts,
                     updated_at=datetime.utcnow(),
                 ))
-                nonlocal entries_count
                 entries_count += 1
             return
 
@@ -511,7 +511,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
             ))
-            nonlocal entries_count
             entries_count += 1
 
         elif folder_type not in ('DIARY',):
