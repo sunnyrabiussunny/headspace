@@ -126,11 +126,19 @@ export default function ExportPage() {
       <div className={styles.card}>
         <div className={styles.cardTitle}>Import from Capacities</div>
         <p className={styles.cardDesc}>
-          Moved from Capacities? Upload your Capacities JSON export and your notes and objects will be mapped into Headspace automatically.
+          Moving from Capacities? Export your data from Capacities and upload it here. Supported formats:
+        </p>
+        <ul className={styles.importList}>
+          <li><strong>Zip export</strong> — the full export zip from Capacities (recommended). Contains all your daily notes and objects as Markdown files, organised in folders by type.</li>
+          <li><strong>Single .md file</strong> — any individual Markdown file exported from Capacities.</li>
+          <li><strong>Single .csv file</strong> — a collection or database exported as CSV.</li>
+        </ul>
+        <p className={styles.importNote}>
+          To export from Capacities: open the app → Settings → Export → choose Markdown export → download the zip.
         </p>
         <input
           type="file"
-          accept=".json"
+          accept=".zip,.md,.csv"
           ref={capFileRef}
           style={{ display: 'none' }}
           onChange={handleCapacitiesImport}
@@ -140,7 +148,7 @@ export default function ExportPage() {
           onClick={() => capFileRef.current?.click()}
           disabled={loading}
         >
-          <UploadIcon /> Import Capacities JSON
+          <UploadIcon /> Upload Capacities Export
         </button>
       </div>
 

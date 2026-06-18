@@ -218,101 +218,210 @@ async def _upsert_object(db: AsyncSession, data: dict):
 @router.post("/import-capacities")
 async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     """
-    Import from a Capacities JSON export.
-    Capacities exports a single JSON with keys like 'spaces', 'objects', 'dailyNotes', etc.
-    We map:
-      - dailyNotes / journal entries → DiaryEntry
-      - objects (people, places, tags, etc.) → KnowledgeObject
+    Import from a Capacities export zip.
+
+    Capacities exports a zip containing:
+      - Markdown files (.md) with YAML front matter for each note/object
+      - CSV files for collections (optional)
+
+    Folder name determines object type:
+      Daily Notes/         → DiaryEntry (date from filename YYYY-MM-DD.md)
+      People/              → PERSON
+      Places/              → PLACE
+      Books/ Movies/ Media/ Podcasts/ → MEDIA
+      Organizations/       → ORGANIZATION
+      Everything else      → IDEA (including tags, ideas, etc.)
+
+    Accepts:
+      - A zip file (Capacities full export)
+      - A single .md file
+      - A single .csv file
     """
-    content = await file.read()
-    try:
-        data = json.loads(content)
-    except Exception:
-        raise HTTPException(400, "Invalid JSON file")
+    import csv as csv_mod
+    import io as _io
+
+    raw = await file.read()
+    fname = (file.filename or "").lower()
 
     entries_count = 0
     objects_count = 0
 
-    # Handle array of exports or single export object
-    if isinstance(data, list):
-        items = data
-    elif isinstance(data, dict):
-        items = []
-        # Capacities structures: try common keys
-        for key in ("dailyNotes", "journal", "entries", "notes"):
-            if key in data and isinstance(data[key], list):
-                items.extend(data[key])
-        for key in ("objects", "people", "places", "media", "ideas", "tags"):
-            if key in data and isinstance(data[key], list):
-                items.extend(data[key])
-        # If nothing matched, treat top-level as a single object
-        if not items:
-            items = [data]
-    else:
-        raise HTTPException(400, "Unrecognized Capacities export format")
-
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-
-        # Detect diary/journal entries
-        cap_type = (item.get("type") or item.get("objectType") or "").lower()
-        has_date = "date" in item or "createdAt" in item or "day" in item
-
-        if cap_type in ("dailynote", "journal", "note", "entry") or (
-            has_date and ("content" in item or "text" in item or "body" in item)
-        ):
-            raw_date = item.get("date") or item.get("day") or item.get("createdAt", "")
-            # Extract YYYY-MM-DD from ISO string
-            date_str = str(raw_date)[:10] if raw_date else ""
-            if not date_str or len(date_str) < 10:
-                continue
-            content_text = item.get("content") or item.get("text") or item.get("body") or ""
-            tags = _extract_capacities_tags(item)
-            entry_id = item.get("id") or str(uuid.uuid4())
-
-            existing = await db.execute(select(DiaryEntry).where(DiaryEntry.id == entry_id))
-            ex = existing.scalar_one_or_none()
-            if ex:
-                ex.content = ex.content + "\n\n" + content_text if ex.content else content_text
-            else:
-                db.add(DiaryEntry(
-                    id=entry_id,
-                    date=date_str,
-                    content=content_text,
-                    tags=tags,
-                ))
-            entries_count += 1
-
+    async def _upsert_entry(date_str: str, content_text: str, tags: list, entry_id: str = None):
+        nonlocal entries_count
+        eid = entry_id or str(uuid.uuid4())
+        existing = await db.execute(select(DiaryEntry).where(DiaryEntry.id == eid))
+        ex = existing.scalar_one_or_none()
+        if ex:
+            ex.content = (ex.content + "\n\n" + content_text).strip() if ex.content else content_text
+            ex.tags = list(set((ex.tags or []) + tags))
         else:
-            # Knowledge object
-            title = item.get("title") or item.get("name") or item.get("label") or ""
-            if not title:
-                continue
+            db.add(DiaryEntry(
+                id=eid,
+                date=date_str,
+                content=content_text,
+                tags=list(tags),
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            ))
+        entries_count += 1
 
-            obj_type = _map_capacities_type(cap_type)
-            description = item.get("description") or item.get("subtitle") or ""
-            notes = item.get("notes") or item.get("content") or item.get("text") or ""
-            tags = _extract_capacities_tags(item)
-            obj_id = item.get("id") or str(uuid.uuid4())
+    async def _upsert_object(obj_type: str, title: str, description: str, notes: str, tags: list, obj_id: str = None):
+        nonlocal objects_count
+        if not title or not title.strip():
+            return
+        oid = obj_id or str(uuid.uuid4())
+        existing = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == oid))
+        ex = existing.scalar_one_or_none()
+        if ex:
+            ex.description = description or ex.description
+            ex.notes = (notes or ex.notes)
+            ex.tags = list(set((ex.tags or []) + tags))
+        else:
+            db.add(KnowledgeObject(
+                id=oid,
+                type=obj_type,
+                title=title.strip(),
+                description=description or "",
+                notes=notes or "",
+                tags=list(tags),
+                properties={},
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            ))
+        objects_count += 1
 
-            existing = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == obj_id))
-            ex = existing.scalar_one_or_none()
-            if ex:
-                ex.title = title
-                ex.description = description or ex.description
-                ex.notes = notes or ex.notes
-            else:
-                db.add(KnowledgeObject(
-                    id=obj_id,
-                    type=obj_type,
-                    title=title,
-                    description=description,
-                    notes=notes,
-                    tags=tags,
-                    properties={},
-                ))
-            objects_count += 1
+    def _parse_md(text: str):
+        """Parse Markdown with optional YAML front matter. Returns (meta_dict, body_str)."""
+        import re as _re
+        meta = {}
+        body = text
+        fm_match = _re.match(r'^---\s*\n(.*?)\n---\s*\n', text, _re.DOTALL)
+        if fm_match:
+            body = text[fm_match.end():]
+            for line in fm_match.group(1).splitlines():
+                if ':' in line:
+                    k, _, v = line.partition(':')
+                    meta[k.strip()] = v.strip().strip('"').strip("'")
+        return meta, body.strip()
+
+    def _tags_from_meta(meta: dict) -> list:
+        raw = meta.get('tags', '')
+        if not raw:
+            return []
+        # YAML inline list: [tag1, tag2] or comma separated
+        raw = raw.strip('[]')
+        return [t.strip().lstrip('#') for t in raw.split(',') if t.strip()]
+
+    def _folder_to_type(folder: str) -> str:
+        folder_lower = folder.lower().strip().rstrip('s')  # rough deplural
+        mapping = {
+            'daily note':  'DIARY',
+            'journal':     'DIARY',
+            'person':      'PERSON',
+            'people':      'PERSON',
+            'contact':     'PERSON',
+            'place':       'PLACE',
+            'location':    'PLACE',
+            'book':        'MEDIA',
+            'movie':       'MEDIA',
+            'film':        'MEDIA',
+            'media':       'MEDIA',
+            'podcast':     'MEDIA',
+            'article':     'MEDIA',
+            'video':       'MEDIA',
+            'album':       'MEDIA',
+            'organization':'ORGANIZATION',
+            'company':     'ORGANIZATION',
+            'team':        'ORGANIZATION',
+            'idea':        'IDEA',
+            'concept':     'IDEA',
+            'tag':         'IDEA',
+            'note':        'IDEA',
+            'project':     'IDEA',
+        }
+        # Try exact then depluralled
+        for key in (folder.lower().strip(), folder_lower):
+            if key in mapping:
+                return mapping[key]
+        return 'IDEA'
+
+    def _date_from_filename(name: str):
+        """Extract YYYY-MM-DD from filenames like 2024-06-15.md or 2024-06-15 Monday.md"""
+        import re as _re
+        m = _re.search(r'(\d{4}-\d{2}-\d{2})', name)
+        return m.group(1) if m else None
+
+    async def _process_md_file(folder: str, filename: str, text: str):
+        obj_type = _folder_to_type(folder)
+        meta, body = _parse_md(text)
+        tags = _tags_from_meta(meta)
+
+        if obj_type == 'DIARY':
+            date_str = (
+                _date_from_filename(filename)
+                or meta.get('date', '')[:10]
+                or meta.get('day', '')[:10]
+            )
+            if not date_str or len(date_str) < 10:
+                return
+            await _upsert_entry(date_str, body, tags)
+        else:
+            title = (
+                meta.get('title')
+                or meta.get('name')
+                or filename.replace('.md', '').strip()
+            )
+            description = meta.get('description', '')
+            await _upsert_object(obj_type, title, description, body, tags)
+
+    # ── Process input ───────────────────────────────────────────────────────
+
+    if fname.endswith('.zip'):
+        try:
+            with zipfile.ZipFile(_io.BytesIO(raw)) as zf:
+                for name in zf.namelist():
+                    if name.endswith('/') or name.startswith('__MACOSX'):
+                        continue
+                    parts = name.replace('\\', '/').split('/')
+                    # folder = first meaningful path component
+                    folder = parts[-2] if len(parts) >= 2 else 'note'
+                    filename = parts[-1]
+
+                    if filename.endswith('.md'):
+                        text = zf.read(name).decode('utf-8', errors='replace')
+                        await _process_md_file(folder, filename, text)
+
+                    elif filename.endswith('.csv'):
+                        text = zf.read(name).decode('utf-8', errors='replace')
+                        reader = csv_mod.DictReader(_io.StringIO(text))
+                        obj_type = _folder_to_type(folder)
+                        if obj_type == 'DIARY':
+                            obj_type = 'IDEA'  # CSV daily notes edge case
+                        for row in reader:
+                            title = row.get('Title') or row.get('Name') or row.get('title') or ''
+                            notes = row.get('Notes') or row.get('Content') or row.get('notes') or ''
+                            desc  = row.get('Description') or row.get('description') or ''
+                            tags  = [t.strip() for t in (row.get('Tags') or '').split(',') if t.strip()]
+                            await _upsert_object(obj_type, title, desc, notes, tags)
+        except zipfile.BadZipFile:
+            raise HTTPException(400, "Invalid zip file")
+
+    elif fname.endswith('.md'):
+        text = raw.decode('utf-8', errors='replace')
+        await _process_md_file('note', fname, text)
+
+    elif fname.endswith('.csv'):
+        text = raw.decode('utf-8', errors='replace')
+        reader = csv_mod.DictReader(_io.StringIO(text))
+        for row in reader:
+            title = row.get('Title') or row.get('Name') or row.get('title') or ''
+            notes = row.get('Notes') or row.get('Content') or row.get('notes') or ''
+            desc  = row.get('Description') or row.get('description') or ''
+            tags  = [t.strip() for t in (row.get('Tags') or '').split(',') if t.strip()]
+            await _upsert_object('IDEA', title, desc, notes, tags)
+
+    else:
+        raise HTTPException(400, "Unsupported file type. Upload a Capacities export zip, a .md file, or a .csv file.")
 
     await db.commit()
     return {
@@ -321,37 +430,3 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         "objects_imported": objects_count,
     }
 
-
-def _extract_capacities_tags(item: dict) -> list:
-    tags = []
-    for key in ("tags", "labels", "hashtags"):
-        val = item.get(key)
-        if isinstance(val, list):
-            for t in val:
-                if isinstance(t, str):
-                    tags.append(t.lstrip("#"))
-                elif isinstance(t, dict):
-                    name = t.get("name") or t.get("title") or ""
-                    if name:
-                        tags.append(name.lstrip("#"))
-    return list(set(tags))
-
-
-def _map_capacities_type(cap_type: str) -> str:
-    mapping = {
-        "person": "PERSON",
-        "contact": "PERSON",
-        "place": "PLACE",
-        "location": "PLACE",
-        "media": "MEDIA",
-        "book": "MEDIA",
-        "movie": "MEDIA",
-        "article": "MEDIA",
-        "podcast": "MEDIA",
-        "organization": "ORGANIZATION",
-        "company": "ORGANIZATION",
-        "idea": "IDEA",
-        "concept": "IDEA",
-        "tag": "IDEA",
-    }
-    return mapping.get(cap_type.lower(), "IDEA")

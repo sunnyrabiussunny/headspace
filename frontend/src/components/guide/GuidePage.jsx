@@ -180,7 +180,7 @@ We discussed @Headspace and the #product roadmap.`}
             { n:2, title:'Manual export', desc:'Click "Export Now" to trigger an immediate backup to the backup folder on the server.' },
             { n:3, title:'Download zip', desc:'Click "Download Zip" to get a zip file of the entire backup — useful before migrating servers.' },
             { n:4, title:'Import Headspace backup', desc:'Upload a previously downloaded backup zip or JSON file to restore data. Existing entries are updated, new ones are added.' },
-            { n:5, title:'Import from Capacities', desc:'Moving from Capacities? Upload your Capacities JSON export on the Export page. Daily notes become diary entries; objects (people, places, media, etc.) are mapped to the correct Headspace type automatically.' },
+            { n:5, title:'Import from Capacities', desc:'Moving from Capacities? In Capacities go to Settings → Export → Markdown export and download the zip. Upload that zip on the Headspace Export page. Daily notes (YYYY-MM-DD.md files) become diary entries; other files are mapped to objects by folder name — People, Places, Books, Organizations, etc.' },
           ]} />
           <Callout icon="💾">
             Point Syncthing at the <code>data/</code> folder to keep a live copy on your phone, laptop, or any other device without any manual steps.
