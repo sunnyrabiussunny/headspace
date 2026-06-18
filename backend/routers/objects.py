@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, or_, update
-from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy.orm import flag_modified
 from typing import List, Optional
 from datetime import datetime
 import uuid
