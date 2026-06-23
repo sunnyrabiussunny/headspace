@@ -675,3 +675,26 @@ async def cleanup_junk_tags(db: AsyncSession = Depends(get_db)):
         "cleaned_entries": cleaned_entries,
         "cleaned_objects": cleaned_objects,
     }
+
+
+@router.delete("/delete-all")
+async def delete_all_data(confirm: str, db: AsyncSession = Depends(get_db)):
+    """
+    Nuclear option — delete ALL diary entries, objects, mentions and time data.
+    Requires ?confirm=DELETEALL in query string.
+    """
+    if confirm != "DELETEALL":
+        raise HTTPException(400, "Confirmation string must be exactly: DELETEALL")
+
+    from models.db_models import DiaryEntry, KnowledgeObject, Mention
+    from routers.time import TimeEntry, TimeProject, TimeTask
+
+    await db.execute(delete(Mention))
+    await db.execute(delete(DiaryEntry))
+    await db.execute(delete(KnowledgeObject))
+    await db.execute(delete(TimeEntry))
+    await db.execute(delete(TimeProject))
+    await db.execute(delete(TimeTask))
+    await db.commit()
+
+    return {"status": "ok", "message": "All data deleted"}

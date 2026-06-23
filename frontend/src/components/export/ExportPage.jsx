@@ -56,6 +56,28 @@ export default function ExportPage() {
     }
   }
 
+  const [deleteAllInput, setDeleteAllInput] = useState('')
+  const [showDeleteAll, setShowDeleteAll]   = useState(false)
+
+  const handleDeleteAll = async () => {
+    if (deleteAllInput !== 'DELETEALL') {
+      toast.error('Type DELETEALL exactly to confirm')
+      return
+    }
+    setLoading(true)
+    try {
+      await axios.delete('/api/export/delete-all', { params: { confirm: 'DELETEALL' } })
+      toast.success('All data deleted. Reloading…')
+      setShowDeleteAll(false)
+      setDeleteAllInput('')
+      setTimeout(() => window.location.reload(), 1500)
+    } catch {
+      toast.error('Delete failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleCleanupJunkTags = async () => {
     if (!window.confirm('This will delete all junk tags imported from Capacities markdown headings (tags starting with - or containing --). Continue?')) return
     setLoading(true)
@@ -177,6 +199,47 @@ export default function ExportPage() {
         >
           <UploadIcon /> Upload Capacities Export
         </button>
+      </div>
+
+      {/* ── DANGER ZONE ── */}
+      <div className={styles.card} style={{borderColor:'var(--accent-red, #b03030)'}}>
+        <div className={styles.cardTitle} style={{color:'var(--accent-red, #e05252)'}}>
+          ⚠️ Delete All Data
+        </div>
+        <p className={styles.cardDesc}>
+          Permanently deletes every diary entry, object, mention, and time log from the database.
+          This cannot be undone. The app will reload after deletion.
+        </p>
+        {!showDeleteAll ? (
+          <button className="btn btn-danger" onClick={() => setShowDeleteAll(true)}>
+            Delete Everything
+          </button>
+        ) : (
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            <p style={{fontSize:12,color:'var(--accent-red,#e05252)',fontWeight:600}}>
+              Type DELETEALL to confirm:
+            </p>
+            <input
+              className={styles.confirmInput}
+              placeholder="DELETEALL"
+              value={deleteAllInput}
+              onChange={e => setDeleteAllInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleDeleteAll()}
+              autoFocus
+            />
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn btn-danger"
+                onClick={handleDeleteAll}
+                disabled={deleteAllInput !== 'DELETEALL' || loading}>
+                Confirm Delete All
+              </button>
+              <button className="btn btn-secondary"
+                onClick={() => { setShowDeleteAll(false); setDeleteAllInput('') }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Cleanup junk tags */}

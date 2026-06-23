@@ -4,7 +4,7 @@
   overflow: hidden;
 }
 
-/* ── Sidebar ───────────────────────────────────────────────────────────── */
+/* ── Sidebar ── */
 .sidebar {
   width: var(--sidebar-width);
   background: var(--bg-secondary);
@@ -65,7 +65,37 @@
 .navItem:hover { background: var(--bg-hover); color: var(--text-primary); }
 .navActive { background: var(--bg-selected) !important; color: var(--text-primary) !important; }
 
-/* ── Bottom nav (mobile only) ──────────────────────────────────────────── */
+/* ── Right panel ── */
+.rightPanel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ── Top bar ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  padding: 10px 20px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+  gap: 12px;
+  height: 52px;
+}
+
+/* ── Main content ── */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Mobile bottom nav ── */
 .bottomNav {
   display: none;
   position: fixed;
@@ -92,19 +122,10 @@
 }
 .bottomNavItem:hover, .bottomNavActive { color: var(--accent-teal); }
 
-/* ── Main content ──────────────────────────────────────────────────────── */
-.main {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* ── Responsive ────────────────────────────────────────────────────────── */
+/* ── Responsive ── */
 @media (max-width: 768px) {
   .sidebar { display: none; }
   .bottomNav { display: flex; }
   .main { padding-bottom: var(--nav-height); }
+  .topbar { padding: 8px 14px; }
 }
-

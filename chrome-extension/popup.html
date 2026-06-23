@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Headspace Time</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div id="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <span class="logo-mark">H</span>
+      <span class="logo-text">headspace</span>
+    </div>
+    <button id="openDashBtn" class="icon-btn" title="Open dashboard">↗</button>
+  </div>
+
+  <!-- Server status -->
+  <div id="statusBar" class="status-bar status-checking">Connecting…</div>
+
+  <!-- Running timer banner -->
+  <div id="runningBanner" class="running-banner hidden">
+    <div class="running-left">
+      <span class="running-dot"></span>
+      <div>
+        <div id="runningProject" class="running-project">Project</div>
+        <div id="runningDesc" class="running-desc"></div>
+      </div>
+    </div>
+    <div id="liveTimer" class="live-timer">0:00:00</div>
+  </div>
+
+  <!-- Start new timer section -->
+  <div class="section">
+    <div class="section-title">Start Timer</div>
+
+    <select id="projectSelect" class="input">
+      <option value="">Loading projects…</option>
+    </select>
+
+    <input id="descInput" class="input" type="text"
+      placeholder="What are you working on?" />
+
+    <div class="btn-row">
+      <button id="startBtn" class="btn btn-primary" disabled>▶ Start</button>
+      <button id="stopBtn" class="btn btn-stop hidden">■ Stop</button>
+    </div>
+  </div>
+
+  <!-- Today's entries -->
+  <div class="section">
+    <div class="section-title-row">
+      <span class="section-title">Today</span>
+      <span id="todayTotal" class="today-total"></span>
+    </div>
+    <div id="entriesList" class="entries-list">
+      <div class="empty">No entries today</div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="settings-row">
+    <label class="settings-label">Server URL</label>
+    <input id="serverUrl" class="input input-sm"
+      placeholder="http://192.168.10.103:5151" />
+    <button id="saveSettings" class="btn btn-sm">Save</button>
+  </div>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

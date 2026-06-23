@@ -6,13 +6,9 @@ import {
   startOfMonth, getDay, addMonths, subMonths
 } from 'date-fns'
 import toast from 'react-hot-toast'
-import {
-  getDatesWithEntries, getEntriesForDate,
-  createEntry, deleteEntry, globalSearch
-} from '../../api'
+import { getDatesWithEntries, getEntriesForDate, createEntry, deleteEntry } from '../../api'
 import DiaryEntryCard from './DiaryEntryCard'
 import DiaryEditor from './DiaryEditor'
-import SearchResultsList from '../SearchResultsList'
 import styles from './DiaryPage.module.css'
 
 export default function DiaryPage() {
@@ -21,13 +17,9 @@ export default function DiaryPage() {
   const [datesWithEntries, setDatesWithEntries] = useState(new Set())
   const [entries, setEntries]                   = useState([])
   const [editingId, setEditingId]               = useState(null)
-  const [searchQuery, setSearchQuery]           = useState('')
-  const [searchResults, setSearchResults]       = useState([])
-  const [searching, setSearching]               = useState(false)
   const [showCal, setShowCal]                   = useState(false)
   const [calMonth, setCalMonth]                 = useState(new Date())
   const calRef      = useRef(null)
-  const searchTimer = useRef(null)
   const navigate    = useNavigate()
   const location    = useLocation()
 
@@ -50,15 +42,6 @@ export default function DiaryPage() {
       .catch(() => setEntries([]))
   }, [selectedDate])
 
-  useEffect(() => {
-    clearTimeout(searchTimer.current)
-    if (!searchQuery.trim()) { setSearchResults([]); setSearching(false); return }
-    setSearching(true)
-    searchTimer.current = setTimeout(async () => {
-      try { setSearchResults(await globalSearch(searchQuery.trim())) }
-      finally { setSearching(false) }
-    }, 250)
-  }, [searchQuery])
 
   // Close mini cal on outside click
   useEffect(() => {
@@ -115,30 +98,8 @@ export default function DiaryPage() {
 
   return (
     <div className={styles.page}>
-
-      {/* Search bar */}
-      <div className={styles.searchBar}>
-        <SearchIcon />
-        <input
-          className={styles.searchInput}
-          placeholder="Search diary and objects..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          onKeyDown={e => e.key === 'Escape' && setSearchQuery('')}
-        />
-        {searchQuery && (
-          <button className={styles.clearBtn} onClick={() => setSearchQuery('')}><XIcon /></button>
-        )}
-      </div>
       <div className={styles.divider} />
 
-      {searchQuery ? (
-        <SearchResultsList
-          results={searchResults} loading={searching} query={searchQuery}
-          onDiaryClick={r => { goToDate(parseISO(r.date)); setSearchQuery('') }}
-          onObjectClick={r => { setSearchQuery(''); navigate(`/objects/${r.id}`) }}
-        />
-      ) : (
         <div className={styles.content}>
 
           {/* Week strip row */}
@@ -219,9 +180,7 @@ export default function DiaryPage() {
           </div>
 
         </div>
-      )}
-    </div>
-  )
+      </div>
 }
 
 // ── Mini Calendar ─────────────────────────────────────────────────────────────

@@ -100,3 +100,21 @@
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   margin-bottom: 12px;
 }
+
+.confirmInput {
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-red, #b03030);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  outline: none;
+  width: 100%;
+  letter-spacing: 0.05em;
+}
+
+.confirmInput:focus {
+  border-color: var(--accent-red, #e05252);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-red, #e05252) 20%, transparent);
+}
