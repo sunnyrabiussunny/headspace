@@ -181,6 +181,7 @@ export default function DiaryPage() {
 
         </div>
       </div>
+  )
 }
 
 // ── Mini Calendar ─────────────────────────────────────────────────────────────

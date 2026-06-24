@@ -8,10 +8,19 @@ let tickInterval = null
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 const api = async (method, path, body) => {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } }
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    mode: 'cors',
+  }
   if (body) opts.body = JSON.stringify(body)
-  const r = await fetch(`${serverUrl}/api/time${path}`, opts)
-  if (!r.ok && r.status !== 204) throw new Error(`${r.status}`)
+  let r
+  try {
+    r = await fetch(`${serverUrl}/api/time${path}`, opts)
+  } catch (e) {
+    throw new Error('fetch failed — server unreachable or CORS blocked')
+  }
+  if (!r.ok && r.status !== 204) throw new Error(`HTTP ${r.status}`)
   if (r.status === 204) return null
   return r.json()
 }
@@ -151,9 +160,11 @@ async function loadAll() {
     renderEntries(entries)
     setStatus('ok', `Connected · ${serverUrl.replace('http://','').replace('https://','').split('/')[0]}`)
   } catch (err) {
-    setStatus('error', `Cannot reach Headspace server`)
+    const msg = err.message || 'Network error'
+    setStatus('error', `Cannot reach server — ${msg}`)
     entriesList.innerHTML = '<div class="empty">Check server URL in settings below</div>'
     startBtn.disabled = true
+    console.error('Headspace connection error:', err)
   }
 }
 
