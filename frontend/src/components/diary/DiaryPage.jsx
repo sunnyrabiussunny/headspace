@@ -7,6 +7,7 @@ import {
 } from 'date-fns'
 import toast from 'react-hot-toast'
 import { getDatesWithEntries, getEntriesForDate, createEntry, deleteEntry } from '../../api'
+import { getEntries as getTimeEntries, getProjects as getTimeProjects, fmtHours } from '../../api_time'
 import DiaryEntryCard from './DiaryEntryCard'
 import DiaryEditor from './DiaryEditor'
 import styles from './DiaryPage.module.css'
@@ -14,6 +15,8 @@ import styles from './DiaryPage.module.css'
 export default function DiaryPage() {
   const [selectedDate, setSelectedDate]         = useState(new Date())
   const [weekStart, setWeekStart]               = useState(startOfWeek(new Date(), { weekStartsOn: 1 }))
+  const [dayTimeEntries, setDayTimeEntries]     = useState([])
+  const [timeProjects, setTimeProjects]         = useState([])
   const [datesWithEntries, setDatesWithEntries] = useState(new Set())
   const [entries, setEntries]                   = useState([])
   const [editingId, setEditingId]               = useState(null)
@@ -35,6 +38,12 @@ export default function DiaryPage() {
   useEffect(() => {
     getDatesWithEntries().then(d => setDatesWithEntries(new Set(d))).catch(() => {})
   }, [entries])
+
+  useEffect(() => {
+    const dayStr = format(selectedDate, 'yyyy-MM-dd')
+    getTimeEntries({ from_date: dayStr, to_date: dayStr }).then(setDayTimeEntries).catch(() => {})
+    getTimeProjects().then(setTimeProjects).catch(() => {})
+  }, [selectedDate])
 
   useEffect(() => {
     getEntriesForDate(format(selectedDate, 'yyyy-MM-dd'))
@@ -178,6 +187,36 @@ export default function DiaryPage() {
               <PlusIcon /> Daily Note
             </button>
           </div>
+
+          {/* ── Day timelog section ── */}
+          {dayTimeEntries.length > 0 && (() => {
+            const projMap = Object.fromEntries(timeProjects.map(p => [p.id, p]))
+            const groups = {}
+            dayTimeEntries.forEach(e => {
+              if (!groups[e.project_id]) groups[e.project_id] = { proj: projMap[e.project_id], total: 0, count: 0 }
+              groups[e.project_id].total += (e.duration || 0)
+              groups[e.project_id].count += 1
+            })
+            const dayTotal = dayTimeEntries.reduce((s, e) => s + (e.duration||0), 0)
+            return (
+              <div className={styles.timelogSection}>
+                <div className={styles.timelogHeader}>
+                  <span className={styles.timelogTitle}>⏱ Time Logged</span>
+                  <span className={styles.timelogTotal}>{fmtHours(dayTotal)}</span>
+                </div>
+                {Object.values(groups).map(g => (
+                  <div key={g.proj?.id || 'unknown'} className={styles.timelogRow}>
+                    <span className={styles.timelogDot}
+                      style={{ background: g.proj?.color || '#888' }} />
+                    <span className={styles.timelogProj}>{g.proj?.name || 'Unknown project'}</span>
+                    {g.count > 1 && <span className={styles.timelogSessions}>{g.count} sessions</span>}
+                    <span className={styles.timelogDur}>{fmtHours(g.total)}</span>
+                  </div>
+                ))}
+                <a className={styles.timelogLink} href="/time">View full timelog →</a>
+              </div>
+            )
+          })()}
 
         </div>
       </div>

@@ -126,3 +126,79 @@
   transition: background .15s, color .15s; margin-top: 4px;
 }
 .addBtn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--text-muted); }
+
+/* ── Day timelog section ── */
+.timelogSection {
+  margin: 16px 0 8px;
+  padding: 14px 16px;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--divider);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timelogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.timelogTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.timelogTotal {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-teal);
+}
+
+.timelogRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timelogDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.timelogProj {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.timelogSessions {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.timelogDur {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-green);
+}
+
+.timelogLink {
+  font-size: 12px;
+  color: var(--accent-teal);
+  text-decoration: none;
+  margin-top: 2px;
+  align-self: flex-end;
+}
+
+.timelogLink:hover {
+  text-decoration: underline;
+}

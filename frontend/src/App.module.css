@@ -48,6 +48,8 @@
   flex-direction: column;
   gap: 2px;
   padding: 0 8px;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .navItem {
@@ -128,4 +130,23 @@
   .bottomNav { display: flex; }
   .main { padding-bottom: var(--nav-height); }
   .topbar { padding: 8px 14px; }
+}
+
+/* ── Theme toggle button ── */
+.themeToggle {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--divider);
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+.themeToggle:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }

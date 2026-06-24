@@ -334,7 +334,7 @@ async def export_csv(
         ])
 
     buf.seek(0)
-    filename = f"timelog_{from_date}_to_{to_date}.csv"
+    filename = f"Headspace_Timelog_{from_date}_to_{to_date}.csv"
     return StreamingResponse(
         io.BytesIO(buf.getvalue().encode()),
         media_type="text/csv",

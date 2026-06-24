@@ -115,3 +115,68 @@
 @media (max-width: 500px) {
   .weekGrid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ── Smart description mention popup ── */
+.mentionPopup {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--divider);
+  border-radius: var(--border-radius);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+  z-index: 200;
+  overflow: hidden;
+}
+.mentionHint { padding: 10px 12px; font-size: 12px; color: var(--text-muted); }
+.mentionRow {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; cursor: pointer; font-size: 13px;
+  transition: background 0.1s;
+}
+.mentionRow:hover, .mentionActive { background: var(--bg-hover); }
+.mentionType { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.mentionLink {
+  color: var(--accent-teal); font-weight: 600; cursor: pointer;
+}
+.mentionLink:hover { text-decoration: underline; }
+
+/* ── Live timer colour when running ── */
+.liveTimerRunning { color: var(--accent-teal); }
+
+/* ── Combined day groups ── */
+.groupBlock {
+  padding: 6px 8px; background: var(--bg-secondary);
+  border-radius: 6px; cursor: pointer;
+  transition: background 0.1s;
+}
+.groupBlock:hover { background: var(--bg-hover); }
+.groupTop { display: flex; justify-content: space-between; align-items: center; gap:4px; }
+.groupProj { font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex:1; }
+.groupDur { font-size: 11px; color: var(--accent-green); font-weight: 700; flex-shrink:0; }
+.groupSessions { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.groupDesc { font-size: 10px; color: var(--text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Day detail modal ── */
+.modalTitleRow { display: flex; align-items: center; justify-content: space-between; }
+.modalTotal { font-size: 18px; font-weight: 700; color: var(--accent-teal); }
+.detailList { display: flex; flex-direction: column; gap: 14px; max-height: 360px; overflow-y: auto; }
+.detailGroup { display: flex; flex-direction: column; gap: 6px; }
+.detailGroupHeader {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 14px; font-weight: 700; padding-bottom: 4px;
+  border-bottom: 1px solid var(--divider);
+}
+.detailGroupTotal { font-size: 13px; color: var(--accent-green); }
+.detailEntry {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; background: var(--bg-secondary); border-radius: 6px;
+}
+.detailEntryTime { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.detailEntryDesc { font-size: 12px; color: var(--text-secondary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detailEntryDur { font-size: 12px; color: var(--accent-green); font-weight: 600; white-space: nowrap; }
+.detailEditBtn { font-size: 11px; padding: 2px 7px; border-radius: 4px; background: var(--bg-hover); color: var(--text-secondary); transition: color 0.1s; }
+.detailEditBtn:hover { color: var(--text-primary); }
+
+/* ── Day number today ── */
+.dayNumToday { color: var(--accent-teal); }
