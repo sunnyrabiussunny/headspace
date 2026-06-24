@@ -618,26 +618,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
 
 
 
-@router.delete("/cleanup-date-objects")
-async def cleanup_date_objects(db: AsyncSession = Depends(get_db)):
-    """
-    One-shot cleanup: delete all KnowledgeObjects whose title is a date
-    (YYYY-MM-DD format) — these were wrongly imported as objects instead
-    of diary entries during a bad Capacities import run.
-    """
-    import re as _re
-    DATE_PAT = _re.compile(r'^\d{4}-\d{2}-\d{2}')
-    result = await db.execute(select(KnowledgeObject))
-    deleted = 0
-    for obj in result.scalars().all():
-        if obj.title and DATE_PAT.match(obj.title.strip()):
-            await db.execute(delete(Mention).where(Mention.object_id == obj.id))
-            await db.execute(delete(Mention).where(Mention.source_id == obj.id))
-            await db.execute(delete(KnowledgeObject).where(KnowledgeObject.id == obj.id))
-            deleted += 1
-    await db.commit()
-    return {"status": "ok", "deleted_date_objects": deleted}
-
 
 @router.delete("/cleanup-junk-tags")
 async def cleanup_junk_tags(db: AsyncSession = Depends(get_db)):
