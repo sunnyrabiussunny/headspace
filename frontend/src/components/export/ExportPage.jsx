@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
+import GuidePage from '../guide/GuidePage'
 import { getExportStatus, runBackup, downloadBackup, importBackup, importCapacities } from '../../api'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import styles from './ExportPage.module.css'
 
 export default function ExportPage() {
-  const [status, setStatus]       = useState(null)
+  const [settingsTab, setSettingsTab] = useState('backup')
+  const [status, setStatus]           = useState(null)
   const [loading, setLoading]     = useState(false)
   const fileRef                   = useRef(null)
   const capFileRef                = useRef(null)
@@ -119,14 +121,36 @@ export default function ExportPage() {
     }
   }
 
+  const STABS = [
+    { id: 'backup', label: '💾 Backup & Import' },
+    { id: 'danger', label: '⚠️ Data Management' },
+    { id: 'guide',  label: '📖 Guide' },
+  ]
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h1 className={styles.title}>Export</h1>
+        <h1 className={styles.title}>Settings</h1>
         <p className={styles.subtitle}>
-          All data saved as Markdown and JSON. Sync the backup folder with Syncthing to keep copies anywhere.
+          Backup, import, data management and app guide.
         </p>
       </div>
+
+      <div className={styles.stabs}>
+        {STABS.map(t => (
+          <button key={t.id}
+            className={`${styles.stab} ${settingsTab === t.id ? styles.stabActive : ''}`}
+            onClick={() => setSettingsTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {settingsTab === 'guide' && <GuidePage embedded />}
+
+      {settingsTab !== 'guide' && <>
+
+      {settingsTab === 'backup' && <>
 
       {/* Status card */}
       <div className={styles.card}>
@@ -200,6 +224,10 @@ export default function ExportPage() {
           <UploadIcon /> Upload Capacities Export
         </button>
       </div>
+
+      </> /* end backup tab */ }
+
+      {settingsTab === 'danger' && <>
 
       {/* ── DANGER ZONE ── */}
       <div className={styles.card} style={{borderColor:'var(--accent-red, #b03030)'}}>
@@ -304,19 +332,7 @@ export default function ExportPage() {
           <li>Your data is always open Markdown and JSON — no lock-in.</li>
         </ol>
       </div>
+      </> /* end danger tab */ }
     </div>
   )
-}
-
-function ClockIcon() {
-  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-}
-function FolderIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-}
-function DownloadIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-}
-function UploadIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
 }

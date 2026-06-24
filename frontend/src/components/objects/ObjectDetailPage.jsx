@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { getEntries as getTimeEntries, getProjects as getTimeProjects, fmtHours } from '../../api_time'
 import {
   getObject, updateObject, deleteObject,
   getMentions, mentionSearch, createObject, getEntryContext,
@@ -87,7 +88,9 @@ export default function ObjectDetailPage() {
 
   const [obj,       setObj]       = useState(null)
   const [title,     setTitle]     = useState('')
-  const [backlinks, setBacklinks] = useState([])
+  const [backlinks, setBacklinks]   = useState([])
+  const [timeProjs, setTimeProjs]   = useState([])
+  const [timeEnts,  setTimeEnts]    = useState([])
   const [showMerge, setShowMerge] = useState(false)
   const [allObjects, setAllObjects] = useState([])
   const [mergeTarget, setMergeTarget] = useState('')
@@ -135,6 +138,15 @@ export default function ObjectDetailPage() {
       pendingDisplayRef.current = null
     }
   }, [obj])
+
+  // Load time entries referencing this object
+  useEffect(() => {
+    Promise.all([getTimeProjects(), getTimeEntries({})]).then(([projs, ents]) => {
+      setTimeProjs(projs)
+      // Filter entries whose description contains this object id
+      setTimeEnts(ents.filter(e => e.description && e.description.includes(id)))
+    }).catch(() => {})
+  }, [id])
 
   // Load backlinks
   useEffect(() => {
@@ -527,6 +539,42 @@ export default function ObjectDetailPage() {
           ))}
         </div>
       )}
+
+      {/* Time entries that reference this object */}
+      {timeEnts.length > 0 && (() => {
+        const projMap = Object.fromEntries(timeProjs.map(p => [p.id, p]))
+        // Group by project
+        const groups = {}
+        timeEnts.forEach(e => {
+          if (!groups[e.project_id]) groups[e.project_id] = { proj: projMap[e.project_id], total: 0, entries: [] }
+          groups[e.project_id].total += (e.duration || 0)
+          groups[e.project_id].entries.push(e)
+        })
+        return (
+          <div className={styles.backlinks}>
+            <div className={styles.divider} />
+            <div className={styles.blHeader}>
+              <span>⏱ Tracked Time</span>
+              <span className={styles.blCount}>{timeEnts.length} entries</span>
+            </div>
+            {Object.values(groups).map(g => (
+              <a key={g.proj?.id || 'unknown'} href="/time" className={styles.blRow}
+                style={{ textDecoration:'none' }}>
+                <span className={styles.blIcon}>
+                  <span style={{ width:10, height:10, borderRadius:'50%',
+                    background: g.proj?.color || '#888', display:'inline-block' }} />
+                </span>
+                <div className={styles.blInfo}>
+                  <span className={styles.blLabel}>{g.proj?.name || 'Unknown project'}</span>
+                  <span className={styles.blSnippet}>
+                    {g.entries.length} session{g.entries.length !== 1 ? 's' : ''} · {fmtHours(g.total)}
+                  </span>
+                </div>
+              </a>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* Merge modal */}
       {showMerge && (

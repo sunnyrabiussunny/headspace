@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import toast from 'react-hot-toast'
 import { getAllEntries, deleteEntry } from '../../api'
@@ -19,7 +19,10 @@ function plainText(content) {
 }
 
 export default function AllEntriesPage() {
+  const location = useLocation()
+  const initialTag = new URLSearchParams(location.search).get('tag') || null
   const [entries, setEntries]     = useState([])
+  const [activeTag, setActiveTag] = useState(initialTag)
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading]     = useState(true)
   const navigate = useNavigate()
@@ -27,14 +30,14 @@ export default function AllEntriesPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const e = await getAllEntries()
+      const e = await getAllEntries(activeTag)
       setEntries(e)
     } catch {
       toast.error('Failed to load entries')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeTag])
 
   useEffect(() => { load() }, [load])
 

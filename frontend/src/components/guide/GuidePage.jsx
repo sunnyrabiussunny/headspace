@@ -15,7 +15,7 @@ const SECTIONS = [
   { id: 'tips',      label: 'Tips and Workflow' },
 ]
 
-export default function GuidePage() {
+export default function GuidePage({ embedded = false }) {
   const navigate  = useNavigate()
   const [active, setActive] = useState('what')
 
@@ -28,7 +28,7 @@ export default function GuidePage() {
     <div className={styles.page}>
 
       {/* Left: section nav (desktop only) */}
-      <nav className={styles.toc}>
+      <nav className={styles.toc} style={embedded ? {display:'none'} : {}}>
         <div className={styles.tocTitle}>Contents</div>
         {SECTIONS.map(s => (
           <button

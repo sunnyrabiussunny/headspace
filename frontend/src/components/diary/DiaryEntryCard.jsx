@@ -48,7 +48,13 @@ export default function DiaryEntryCard({ entry, onClick, onDelete }) {
       </p>
       {entry.tags?.length > 0 && (
         <div className={styles.tags}>
-          {entry.tags.map(t => <span key={t} className="tag-pill">#{t}</span>)}
+          {entry.tags.map(t => (
+            <span key={t} className="tag-pill"
+              style={{ cursor:'pointer' }}
+              onClick={e => { e.stopPropagation(); navigate(`/all?tag=${encodeURIComponent(t)}`) }}>
+              #{t}
+            </span>
+          ))}
         </div>
       )}
     </div>
