@@ -65,3 +65,13 @@ async def delete_tag(tag_name: str, db: AsyncSession = Depends(get_db)):
 
     await db.commit()
     return {"status": "ok"}
+
+
+@router.get("/search")
+async def search_tags(q: str = "", db: AsyncSession = Depends(get_db)):
+    """Return tags whose name starts with or contains q."""
+    result = await list_all_tags(db)
+    q = q.lower().strip().lstrip('#')
+    if not q:
+        return result
+    return [t for t in result if q in t.name.lower()]

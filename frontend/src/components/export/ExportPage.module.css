@@ -150,3 +150,16 @@
   border-bottom-color: var(--accent-teal);
   background: var(--bg-card);
 }
+
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.loading {
+  color: var(--text-muted);
+  padding: 40px;
+  text-align: center;
+  font-size: 14px;
+}

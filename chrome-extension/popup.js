@@ -194,7 +194,7 @@ stopBtn.addEventListener('click', async () => {
 })
 
 openDashBtn.addEventListener('click', () => {
-  chrome.tabs.create({ url: `${serverUrl}/time` })
+  chrome.tabs.create({ url: `${serverUrl}/timer` })
 })
 
 saveSettings.addEventListener('click', async () => {

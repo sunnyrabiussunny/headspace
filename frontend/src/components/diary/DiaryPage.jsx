@@ -213,7 +213,7 @@ export default function DiaryPage() {
                     <span className={styles.timelogDur}>{fmtHours(g.total)}</span>
                   </div>
                 ))}
-                <a className={styles.timelogLink} href="/time">View full timelog →</a>
+                <a className={styles.timelogLink} href="/timer">View full timelog →</a>
               </div>
             )
           })()}

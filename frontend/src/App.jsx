@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { to: '/all',     label: 'Entries',  icon: ListIcon },
   { to: '/objects', label: 'Objects',  icon: LayersIcon },
   { to: '/tags',    label: 'Tags',     icon: TagIcon },
-  { to: '/time',    label: 'Timer',    icon: ClockIcon },
+  { to: '/timer',    label: 'Timer',    icon: ClockIcon },
   { to: '/export',  label: 'Settings', icon: SettingsIcon },
 ]
 
@@ -77,7 +77,7 @@ export default function App() {
             <Route path="/tags"          element={<TagsPage />} />
             <Route path="/export"        element={<ExportPage />} />
 
-            <Route path="/time"             element={<TimePage />} />
+            <Route path="/timer"             element={<TimePage />} />
             <Route path="/guide"            element={<Navigate to="/export" replace />} />
           </Routes>
         </main>

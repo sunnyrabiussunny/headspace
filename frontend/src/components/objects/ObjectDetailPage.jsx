@@ -20,6 +20,17 @@ const TYPE_META  = {
 const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢', MEDIA:'🎬' }
 const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION','MEDIA']
 
+const OBJ_TAG_RE = /#([a-zA-Z][a-zA-Z0-9_-]{0,39})/g
+function extractTagsFromText(text) {
+  const tags = new Set()
+  OBJ_TAG_RE.lastIndex = 0
+  let m
+  while ((m = OBJ_TAG_RE.exec(text)) !== null) {
+    tags.add(m[1].toLowerCase())
+  }
+  return [...tags]
+}
+
 function parseMd(md) {
   const segs = []; let last = 0
   MENTION_RE.lastIndex = 0; let m
@@ -191,8 +202,12 @@ export default function ObjectDetailPage() {
     clearTimeout(saveTimer.current)
     const md = toMd(segsRef.current)
     setNotesMd(md)
-    updateObject(id, { notes: md })
-      .then(() => { setSaved(true); setTimeout(() => setSaved(false), 1800) })
+    const detectedTags = extractTagsFromText(toDisplay(segsRef.current))
+    updateObject(id, { notes: md, tags: detectedTags })
+      .then(saved => {
+        setObj(saved)
+        setSaved(true); setTimeout(() => setSaved(false), 1800)
+      })
       .catch(() => {})
     setIsEditing(false)
     setQuery(null)
@@ -203,8 +218,9 @@ export default function ObjectDetailPage() {
     saveTimer.current = setTimeout(() => {
       const md = toMd(segsRef.current)
       setNotesMd(md)
-      updateObject(id, { notes: md })
-        .then(() => { setSaved(true); setTimeout(() => setSaved(false), 1800) })
+      const detectedTags = extractTagsFromText(toDisplay(segsRef.current))
+      updateObject(id, { notes: md, tags: detectedTags })
+        .then(saved => { setObj(saved); setSaved(true); setTimeout(() => setSaved(false), 1800) })
         .catch(() => {})
     }, 500)
   }, [id])

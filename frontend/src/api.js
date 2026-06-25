@@ -51,3 +51,4 @@ export const importCapacities    = (file) => {
 }
 export const getEntryContext     = (entryId, objectId) =>
   api.get(`/diary/entry/${entryId}/context`, { params: { object_id: objectId } }).then(r => r.data)
+export const searchTags          = (q) => api.get('/tags/search', { params: { q } }).then(r => r.data)

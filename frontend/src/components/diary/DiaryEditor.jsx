@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { format, parseISO } from 'date-fns'
-import { updateEntry, mentionSearch, createObject } from '../../api'
+import { updateEntry, mentionSearch, createObject, searchTags } from '../../api'
 import styles from './DiaryEditor.module.css'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
@@ -82,6 +82,10 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   const [showTemplates, setShowTemplates] = useState(false)
   const [showTimeEdit, setShowTimeEdit]   = useState(false)
   const [timeValue, setTimeValue]         = useState('')
+  const [tagQuery,   setTagQuery]   = useState(null)   // for #tag autocomplete
+  const [tagResults, setTagResults] = useState([])
+  const [tagSelIdx,  setTagSelIdx]  = useState(0)
+  const tagAnchorRef = useRef(-1)
 
   // Mount
   useEffect(() => {
@@ -108,11 +112,17 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     }
   }, [entry.id])
 
-  // Fetch suggestions
+  // Fetch mention suggestions
   useEffect(() => {
     if (query === null) { setResults([]); setSelIdx(0); return }
     mentionSearch(query).then(r => { setResults(r); setSelIdx(0) }).catch(() => {})
   }, [query])
+
+  // Fetch tag suggestions
+  useEffect(() => {
+    if (tagQuery === null) { setTagResults([]); setTagSelIdx(0); return }
+    searchTags(tagQuery).then(r => { setTagResults(r.slice(0,8)); setTagSelIdx(0) }).catch(() => {})
+  }, [tagQuery])
 
   // Save debounced
   const save = useCallback((extraData = {}) => {
@@ -166,6 +176,19 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
       }
     }
     setQuery(null)
+
+    // Tag autocomplete: detect #word
+    const beforeCursor2 = newVal.slice(0, cursor)
+    const hashIdx = beforeCursor2.lastIndexOf('#')
+    if (hashIdx >= 0) {
+      const frag = beforeCursor2.slice(hashIdx + 1)
+      if (/^[a-zA-Z0-9_-]*$/.test(frag) && !frag.includes(' ')) {
+        tagAnchorRef.current = hashIdx
+        setTagQuery(frag)
+        return
+      }
+    }
+    setTagQuery(null)
   }, [save])
 
   const doInsert = useCallback((obj) => {
@@ -248,7 +271,37 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     } catch {}
   }, [entry.id, timeValue, onSave])
 
+  const insertTag = useCallback((tagName) => {
+    const ta = taRef.current
+    if (!ta || tagAnchorRef.current < 0) return
+    const cursor  = ta.selectionStart
+    const before  = ta.value.slice(0, tagAnchorRef.current)
+    const after   = ta.value.slice(cursor)
+    const newVal  = before + '#' + tagName + ' ' + after
+    ta.value = newVal
+    const newPos  = tagAnchorRef.current + tagName.length + 2
+    ta.setSelectionRange(newPos, newPos)
+    ta.focus()
+    tagAnchorRef.current = -1
+    setTagQuery(null)
+    setTagResults([])
+    setTags(extractTags(newVal))
+    segsRef.current = [{ type: 'text', val: newVal }]
+    save()
+  }, [save])
+
   const handleKeyDown = useCallback((e) => {
+    // Tag autocomplete navigation
+    if (tagQuery !== null && tagResults.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setTagSelIdx(i => Math.min(i+1, tagResults.length-1)); return }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setTagSelIdx(i => Math.max(i-1, 0)); return }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        insertTag(tagResults[tagSelIdx].name)
+        return
+      }
+      if (e.key === 'Escape') { setTagQuery(null); return }
+    }
     if (query !== null) {
       if (e.key === 'ArrowDown') {
         e.preventDefault(); setSelIdx(i => Math.min(i + 1, results.length))
@@ -264,7 +317,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
       return
     }
     if (e.key === 'Escape') onClose()
-  }, [query, results, selIdx, doInsert, doCreate, createType, onClose])
+  }, [query, results, selIdx, doInsert, doCreate, createType, onClose, tagQuery, tagResults, tagSelIdx, insertTag])
 
   return (
     <div className={styles.editor}>
@@ -330,6 +383,23 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
         {tags.length > 0 && (
           <div className={styles.tagRow}>
             {tags.map(t => <span key={t} className={styles.tagPill}>#{t}</span>)}
+          </div>
+        )}
+
+        {/* Tag autocomplete popup */}
+        {tagQuery !== null && tagResults.length > 0 && (
+          <div className={styles.popup}>
+            <div className={styles.popupHint}># Tag suggestions · Enter/Tab to insert</div>
+            {tagResults.map((t, i) => (
+              <div key={t.name}
+                className={`${styles.popupRow} ${i === tagSelIdx ? styles.active : ''}`}
+                onMouseEnter={() => setTagSelIdx(i)}
+                onMouseDown={e => { e.preventDefault(); insertTag(t.name) }}>
+                <span className={styles.popupEmoji}>🏷️</span>
+                <span className={styles.popupTitle}>#{t.name}</span>
+                <span className={styles.popupType}>{t.total} uses</span>
+              </div>
+            ))}
           </div>
         )}
 

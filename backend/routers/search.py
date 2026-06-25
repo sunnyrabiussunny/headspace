@@ -10,22 +10,43 @@ from utils.mentions import strip_mentions
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
-OBJECT_EMOJI = {
-    "PERSON": "person",
-    "PLACE": "place",
-    "IDEA": "idea",
-    "ORGANIZATION": "org",
-}
-
 
 @router.get("/{query}", response_model=List[SearchResult])
 async def global_search(query: str, db: AsyncSession = Depends(get_db)):
     results: List[SearchResult] = []
+    clean_query = query.lstrip('#')   # support #tagname searches
 
-    # Diary entries
+    # If query starts with # — search by tag across diary and objects
+    if query.startswith('#'):
+        tag = clean_query.lower().strip()
+
+        diary_res = await db.execute(select(DiaryEntry).order_by(DiaryEntry.date.desc()))
+        for entry in diary_res.scalars().all():
+            if tag in [t.lower() for t in (entry.tags or [])]:
+                results.append(SearchResult(
+                    id=entry.id,
+                    type="diary",
+                    title=entry.date,
+                    preview=strip_mentions(entry.content)[:140],
+                    date=entry.date,
+                ))
+
+        obj_res = await db.execute(select(KnowledgeObject).order_by(KnowledgeObject.updated_at.desc()))
+        for obj in obj_res.scalars().all():
+            if tag in [t.lower() for t in (obj.tags or [])]:
+                results.append(SearchResult(
+                    id=obj.id,
+                    type="object",
+                    title=obj.title,
+                    preview=obj.description[:140] or obj.notes[:140],
+                    object_type=obj.type,
+                ))
+        return results[:20]
+
+    # Regular full-text search
     diary_res = await db.execute(
         select(DiaryEntry)
-        .where(DiaryEntry.content.contains(query))
+        .where(DiaryEntry.content.contains(clean_query))
         .order_by(DiaryEntry.date.desc())
         .limit(10)
     )
@@ -38,13 +59,12 @@ async def global_search(query: str, db: AsyncSession = Depends(get_db)):
             date=entry.date,
         ))
 
-    # Objects
     obj_res = await db.execute(
         select(KnowledgeObject).where(
             or_(
-                KnowledgeObject.title.ilike(f"%{query}%"),
-                KnowledgeObject.description.ilike(f"%{query}%"),
-                KnowledgeObject.notes.ilike(f"%{query}%"),
+                KnowledgeObject.title.ilike(f"%{clean_query}%"),
+                KnowledgeObject.description.ilike(f"%{clean_query}%"),
+                KnowledgeObject.notes.ilike(f"%{clean_query}%"),
             )
         ).order_by(KnowledgeObject.updated_at.desc()).limit(10)
     )
