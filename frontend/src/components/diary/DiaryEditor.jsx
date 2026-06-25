@@ -144,6 +144,8 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     const newVal = ta.value
     const cursor = ta.selectionStart
     segsRef.current = reconcile(segsRef.current, newVal)
+    // Live tag detection as user types
+    setTags(extractTags(newVal))
     save()
 
     if (skipNextRef.current) {

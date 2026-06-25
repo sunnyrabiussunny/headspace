@@ -6,13 +6,13 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 import zipfile
 import io
 import uuid
 
 from database import get_db
-from models.db_models import DiaryEntry, KnowledgeObject
+from models.db_models import DiaryEntry, KnowledgeObject, Mention
 from models.schemas import DiaryEntryOut, ObjectOut
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -177,7 +177,7 @@ async def import_backup(file: UploadFile = File(...), db: AsyncSession = Depends
 
 
 async def _upsert_entry(db: AsyncSession, data: dict):
-    from sqlalchemy import select
+    from sqlalchemy import select, delete
     result = await db.execute(select(DiaryEntry).where(DiaryEntry.id == data.get("id", "")))
     existing = result.scalar_one_or_none()
     if existing:
@@ -193,7 +193,7 @@ async def _upsert_entry(db: AsyncSession, data: dict):
 
 
 async def _upsert_object(db: AsyncSession, data: dict):
-    from sqlalchemy import select
+    from sqlalchemy import select, delete
     result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == data.get("id", "")))
     existing = result.scalar_one_or_none()
     if existing:
@@ -666,7 +666,7 @@ async def delete_all_data(confirm: str, db: AsyncSession = Depends(get_db)):
     if confirm != "DELETEALL":
         raise HTTPException(400, "Confirmation string must be exactly: DELETEALL")
 
-    from models.db_models import DiaryEntry, KnowledgeObject, Mention
+    from models.db_models import DiaryEntry, KnowledgeObject, Mention, Mention
     from routers.time import TimeEntry, TimeProject, TimeTask
 
     await db.execute(delete(Mention))

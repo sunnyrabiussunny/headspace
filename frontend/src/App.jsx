@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Routes, Route, NavLink } from 'react-router-dom'
+import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import DiaryPage from './components/diary/DiaryPage'
 import ObjectsPage from './components/objects/ObjectsPage'
 import ObjectDetailPage from './components/objects/ObjectDetailPage'
@@ -78,6 +78,7 @@ export default function App() {
             <Route path="/export"        element={<ExportPage />} />
 
             <Route path="/time"             element={<TimePage />} />
+            <Route path="/guide"            element={<Navigate to="/export" replace />} />
           </Routes>
         </main>
       </div>

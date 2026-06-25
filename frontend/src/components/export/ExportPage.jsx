@@ -133,13 +133,11 @@ export default function ExportPage() {
         ))}
       </div>
 
-      {settingsTab === 'guide' && <GuidePage embedded />}
+      {settingsTab === 'guide'  && <GuidePage embedded />}
 
-      {settingsTab !== 'guide' && <>
-
-      {settingsTab === 'backup' && <>
-
-      {/* Status card */}
+      {settingsTab === 'backup' && (
+        <div>
+          {/* Status card */}
       <div className={styles.card}>
         <div className={styles.cardTitle}>
           <ClockIcon /> Auto-backup every 3 days
@@ -211,12 +209,12 @@ export default function ExportPage() {
           <UploadIcon /> Upload Capacities Export
         </button>
       </div>
+        </div>
+      )}
 
-      </> /* end backup tab */ }
-
-      {settingsTab === 'danger' && <>
-
-      {/* ── DANGER ZONE ── */}
+      {settingsTab === 'danger' && (
+        <div>
+          {/* ── DANGER ZONE ── */}
       <div className={styles.card} style={{borderColor:'var(--accent-red, #b03030)'}}>
         <div className={styles.cardTitle} style={{color:'var(--accent-red, #e05252)'}}>
           ⚠️ Delete All Data
@@ -305,7 +303,9 @@ export default function ExportPage() {
           <li>Your data is always open Markdown and JSON — no lock-in.</li>
         </ol>
       </div>
-      </> /* end danger tab */ }
+        </div>
+      )}
+
     </div>
   )
 }
