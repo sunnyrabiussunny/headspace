@@ -11,6 +11,7 @@ export const TYPES = [
   { key: 'IDEA',         label: 'Idea',          emoji: '💡' },
   { key: 'ORGANIZATION', label: 'Organization',  emoji: '🏢' },
   { key: 'MEDIA',        label: 'Media',         emoji: '🎬' },
+  { key: 'PAGE',         label: 'Page',          emoji: '📄' },
 ]
 
 export default function ObjectsPage() {

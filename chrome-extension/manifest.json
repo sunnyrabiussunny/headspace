@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Headspace Time Tracker",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Log time to your self-hosted Headspace from any Chrome tab",
   "permissions": ["storage", "alarms", "notifications"],
   "host_permissions": [
@@ -11,11 +11,21 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_icon": { "32": "icon32.png" },
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    },
     "default_title": "Headspace Time Tracker"
   },
   "background": {
     "service_worker": "background.js"
   },
-  "icons": { "32": "icon32.png" }
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
 }

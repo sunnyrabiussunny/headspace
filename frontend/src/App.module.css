@@ -22,17 +22,10 @@
   padding: 8px 20px 20px;
 }
 
-.logoMark {
-  width: 28px;
-  height: 28px;
-  background: var(--accent-teal);
-  color: var(--bg-primary);
-  border-radius: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 14px;
+.logoImg {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
   flex-shrink: 0;
 }
 

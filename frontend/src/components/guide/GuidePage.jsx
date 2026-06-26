@@ -117,9 +117,10 @@ export default function GuidePage({ embedded = false }) {
             { emoji:'💡', name:'Idea',         desc:'Concepts, projects, topics, or anything that doesn\'t fit neatly elsewhere.' },
             { emoji:'🏢', name:'Organization', desc:'Companies, institutions, communities, or groups.' },
             { emoji:'🎬', name:'Media',        desc:'Books, films, podcasts, articles, albums — anything you are consuming or have consumed.' },
+            { emoji:'📄', name:'Page',         desc:'A general-purpose free-form page. Use it for reference notes, how-to guides, recurring checklists, or anything that does not fit the other types.' },
           ]} />
           <StepList steps={[
-            { n:1, title:'Create an object', desc:'Go to the Objects tab. Click "New". Choose a type, enter a name, and click Create.' },
+            { n:1, title:'Create an object', desc:'Go to the Objects tab. Click "New". Choose a type — Person, Place, Idea, Organization, Media, or Page — enter a name, and click Create.' },
             { n:2, title:'Write notes', desc:'On the object\'s page, click the notes area and type. You can use @ here to link this object to others.' },
             { n:3, title:'Merge duplicates', desc:'Accidentally created "Riyan" and "Riyan Hoq" separately? Click the Merge button on either object\'s page, search for the target, and confirm. All backlinks transfer to the surviving object.' },
             { n:4, title:'See where it\'s mentioned', desc:'Scroll to the Backlinks section at the bottom of the object page. Every diary entry or object note that mentions this object is listed there.' },

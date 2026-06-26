@@ -8,6 +8,7 @@ import GuidePage from './components/guide/GuidePage'
 import AllEntriesPage from './components/diary/AllEntriesPage'
 import TagsPage from './components/tags/TagsPage'
 import GlobalSearch from './components/GlobalSearch'
+import logoImg from './assets/logo.png'
 import TimePage from './components/time/TimePage'
 import styles from './App.module.css'
 
@@ -36,7 +37,7 @@ export default function App() {
       {/* ── Sidebar (desktop) ── */}
       <nav className={styles.sidebar}>
         <div className={styles.logo}>
-          <span className={styles.logoMark}>H</span>
+          <img src={logoImg} alt="Headspace" className={styles.logoImg} />
           <span className={styles.logoText}>headspace</span>
         </div>
         <div className={styles.navLinks}>

@@ -69,7 +69,7 @@ function SmartDescInput({ value, onChange, onSubmit, placeholder }) {
     if (e.key === 'Enter' && query === null) { e.preventDefault(); onSubmit?.() }
   }
 
-  const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢', MEDIA:'🎬' }
+  const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢', MEDIA:'🎬', PAGE:'📄' }
 
   return (
     <div style={{ position:'relative', flex:1 }}>

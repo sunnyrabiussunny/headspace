@@ -13,7 +13,7 @@ from utils.mentions import extract_mentions
 
 router = APIRouter(prefix="/api/objects", tags=["objects"])
 
-VALID_TYPES = {"PERSON", "PLACE", "IDEA", "ORGANIZATION", "MEDIA"}
+VALID_TYPES = {"PERSON", "PLACE", "IDEA", "ORGANIZATION", "MEDIA", "PAGE"}
 
 
 @router.get("/", response_model=List[ObjectOut])

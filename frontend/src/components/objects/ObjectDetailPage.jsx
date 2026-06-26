@@ -16,9 +16,10 @@ const TYPE_META  = {
   IDEA:         { emoji:'💡', color:'#e0c040', bg:'#2a2010' },
   ORGANIZATION: { emoji:'🏢', color:'#3dbfa0', bg:'#112620' },
   MEDIA:        { emoji:'🎬', color:'#9b6fd4', bg:'#1e1228' },
+  PAGE:         { emoji:'📄', color:'#60b8d4', bg:'#122028' },
 }
-const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢', MEDIA:'🎬' }
-const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION','MEDIA']
+const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢', MEDIA:'🎬', PAGE:'📄' }
+const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION','MEDIA','PAGE']
 
 const OBJ_TAG_RE = /#([a-zA-Z][a-zA-Z0-9_-]{0,39})/g
 function extractTagsFromText(text) {
@@ -386,7 +387,7 @@ export default function ObjectDetailPage() {
   return (
     <div className={styles.page}>
       <div className={styles.toolbar}>
-        <button className={styles.backBtn} onClick={() => { handleDone(); navigate('/objects') }}><ArrowLeft /> Back</button>
+        <button className={styles.backBtn} onClick={() => { handleDone(); navigate(-1) }}><ArrowLeft /> Back</button>
         <div className={styles.toolbarRight}>
           {saved && <span className={styles.savedBadge}>Saved</span>}
           {isEditing && (
