@@ -4,19 +4,8 @@ import { format, parseISO } from 'date-fns'
 import toast from 'react-hot-toast'
 import { getAllEntries, deleteEntry } from '../../api'
 import DiaryEditor from './DiaryEditor'
+import { renderRichContent } from './renderRichContent'
 import styles from './AllEntriesPage.module.css'
-
-const CLEAN_RE = /@\[([^\]]+)\]\([^)]+\)/g
-
-function plainText(content) {
-  if (!content || !content.trim()) return ''
-  return content
-    .replace(CLEAN_RE, '@$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/#{1,6}\s/g, '')
-    .trim()
-}
 
 export default function AllEntriesPage() {
   const location = useLocation()
@@ -112,7 +101,6 @@ export default function AllEntriesPage() {
 
               <div className={styles.cardGrid}>
                 {grouped[date].map(entry => {
-                  const preview = plainText(entry.content)
                   let timeStr = ''
                   try {
                     if (entry.created_at) timeStr = format(parseISO(entry.created_at), 'h:mm a')
@@ -135,10 +123,10 @@ export default function AllEntriesPage() {
                         </button>
                       </div>
                       <p className={styles.cardPreview}>
-                        {preview
-                          ? preview
-                          : <span className={styles.emptyNote}>Empty note</span>
-                        }
+                        {renderRichContent(entry.content, {
+                          navigate,
+                          onTagClick: (tag) => setActiveTag(tag)
+                        }) || <span className={styles.emptyNote}>Empty note</span>}
                       </p>
                     </div>
                   )

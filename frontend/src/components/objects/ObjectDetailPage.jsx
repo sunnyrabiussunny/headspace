@@ -68,22 +68,34 @@ function renderRichNotes(md, navigate) {
   if (!md || !md.trim()) {
     return <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>Click to add notes... (type @ to link an object)</span>
   }
-  const re = /@\[([^\]]+)\]\(([^)]+)\)/g
-  const parts = []
-  let last = 0, m
-  re.lastIndex = 0
-  while ((m = re.exec(md)) !== null) {
-    if (m.index > last) parts.push(<span key={`t${last}`}>{md.slice(last, m.index)}</span>)
-    const name = m[1], objId = m[2]
-    parts.push(
-      <span key={`m${m.index}`}
-        style={{ color:'var(--accent-teal)', fontWeight:600, textDecoration:'underline', textUnderlineOffset:2, cursor:'pointer' }}
-        onClick={e => { e.stopPropagation(); navigate(`/objects/${objId}`) }}
-      >{name}</span>
-    )
-    last = m.index + m[0].length
+  const combined = /@\[([^\]]+)\]\(([^)]+)\)|https?:\/\/[^\s\)\]]+/g
+  const parts = []; let last = 0, m, key = 0
+  combined.lastIndex = 0
+  while ((m = combined.exec(md)) !== null) {
+    if (m.index > last) parts.push(<span key={key++}>{md.slice(last, m.index)}</span>)
+    const full = m[0]
+    if (full.startsWith('@[')) {
+      const name = m[1], objId = m[2]
+      parts.push(
+        <span key={key++}
+          style={{ color:'var(--accent-teal)', fontWeight:600, textDecoration:'underline', textUnderlineOffset:2, cursor:'pointer' }}
+          onClick={e => { e.stopPropagation(); navigate(`/objects/${objId}`) }}>
+          {name}
+        </span>
+      )
+    } else {
+      const display = full.replace(/^https?:\/\/(www\.)?/, '').slice(0, 50) + (full.length > 55 ? '…' : '')
+      parts.push(
+        <a key={key++} href={full} target="_blank" rel="noopener noreferrer"
+          style={{ color:'var(--accent-teal)', textDecoration:'underline', textUnderlineOffset:2, wordBreak:'break-all' }}
+          onClick={e => e.stopPropagation()}>
+          {display}
+        </a>
+      )
+    }
+    last = m.index + full.length
   }
-  if (last < md.length) parts.push(<span key="tend">{md.slice(last)}</span>)
+  if (last < md.length) parts.push(<span key={key++}>{md.slice(last)}</span>)
   return parts
 }
 

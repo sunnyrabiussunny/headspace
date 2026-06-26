@@ -1,33 +1,8 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
+import { renderRichContent } from './renderRichContent'
 import styles from './DiaryEntryCard.module.css'
-
-const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
-
-function renderContent(content, navigate) {
-  if (!content || !content.trim()) {
-    return <span className={styles.empty}>Tap to write...</span>
-  }
-  const parts = []
-  let last = 0
-  MENTION_RE.lastIndex = 0
-  let m
-  while ((m = MENTION_RE.exec(content)) !== null) {
-    if (m.index > last) parts.push(<span key={`t${last}`}>{content.slice(last, m.index)}</span>)
-    const name = m[1], objId = m[2]
-    parts.push(
-      <span
-        key={`m${m.index}`}
-        className={styles.mentionLink}
-        onClick={e => { e.stopPropagation(); navigate(`/objects/${objId}`) }}
-      >{name}</span>
-    )
-    last = m.index + m[0].length
-  }
-  if (last < content.length) parts.push(<span key={`t${last}`}>{content.slice(last)}</span>)
-  return parts
-}
 
 export default function DiaryEntryCard({ entry, onClick, onDelete }) {
   const navigate = useNavigate()
@@ -44,7 +19,10 @@ export default function DiaryEntryCard({ entry, onClick, onDelete }) {
         </button>
       </div>
       <p className={styles.preview}>
-        {renderContent(entry.content, navigate)}
+        {renderRichContent(entry.content, {
+          navigate,
+          onTagClick: (tag) => navigate(`/all?tag=${encodeURIComponent(tag)}`)
+        }) || <span className={styles.empty}>Tap to write...</span>}
       </p>
       {entry.tags?.length > 0 && (
         <div className={styles.tags}>

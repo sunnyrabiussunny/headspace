@@ -374,7 +374,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
           className={styles.ta}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="Start writing... (type @ to link objects, # to add tags)"
+          placeholder="Write here... Type @ to link objects (select from popup to make them clickable), # for tags, or paste a URL"
           spellCheck={false}
           defaultValue=""
         />
