@@ -75,16 +75,6 @@ export default function ExportPage() {
     finally { setLoading(false) }
   }
 
-  const handleCleanupJunkTags = async () => {
-    if (!window.confirm('Remove all junk tags (starting with - or containing --)? This cannot be undone.')) return
-    setLoading(true)
-    try {
-      const result = await axios.delete('/api/export/cleanup-junk-tags')
-      toast.success(`Cleaned ${result.data.cleaned_entries} entries and ${result.data.cleaned_objects} objects`)
-    } catch { toast.error('Cleanup failed') }
-    finally { setLoading(false) }
-  }
-
   const TABS = [
     { id: 'backup', label: '💾 Backup & Import' },
     { id: 'danger', label: '⚠️ Data Management' },
@@ -233,17 +223,6 @@ export default function ExportPage() {
                 </div>
               </div>
             )}
-          </div>
-
-          <div className={styles.card}>
-            <div className={styles.cardTitle}>Clean Up Junk Tags</div>
-            <p className={styles.cardDesc}>
-              Removes tags that look like markdown heading anchors (starting with{' '}
-              <code>-</code> or containing <code>--</code>) from all entries and objects.
-            </p>
-            <button className="btn btn-danger" onClick={handleCleanupJunkTags} disabled={loading}>
-              🧹 Remove Junk Tags
-            </button>
           </div>
 
         </div>

@@ -11,8 +11,11 @@ const SECTIONS = [
   { id: 'linking',   label: 'Linking with @' },
   { id: 'backlinks', label: 'Backlinks' },
   { id: 'search',    label: 'Search' },
+  { id: 'timer',     label: 'Timer' },
+  { id: 'extension', label: 'Chrome Extension' },
   { id: 'export',    label: 'Export and Backup' },
   { id: 'tips',      label: 'Tips and Workflow' },
+  { id: 'credits',   label: 'Credits' },
 ]
 
 export default function GuidePage({ embedded = false }) {
@@ -188,6 +191,34 @@ We discussed @Headspace and the #product roadmap.`}
           </Callout>
         </Section>
 
+        <Section id="timer" title="Timer">
+          <p>The <strong>Timer</strong> page (clock icon in the sidebar) is a built-in time tracking tool. Log how long you spend on projects and see your work patterns over the week.</p>
+          <StepList steps={[
+            { n:1, title:'Create a project', desc:'Go to Timer → Projects tab → click "New Project". Give it a name, pick a colour, and optionally add a client name.' },
+            { n:2, title:'Start tracking', desc:'On the Dashboard tab, select a project from the dropdown. Type what you are working on in the description field — you can use @ to link objects and # for tags. Click Start.' },
+            { n:3, title:'Stop the timer', desc:'Click Stop when you are done. The session is saved automatically. If you start a new project while one is running, the previous one is stopped first.' },
+            { n:4, title:'View the week', desc:'The weekly calendar shows all sessions grouped by project per day. Click any day block to see the full breakdown of sessions with start/end times.' },
+            { n:5, title:'Reports', desc:'Switch to the Reports tab to see total hours, average per active day, and a stacked bar chart showing how your time is distributed across projects. Export as CSV with one click.' },
+          ]} />
+          <Callout icon="📅">
+            Time logged on a particular day also appears inline in the Diary view for that day — interleaved with your diary entries by timestamp. This gives you a complete picture of the day without switching tabs.
+          </Callout>
+        </Section>
+
+        <Section id="extension" title="Chrome Extension">
+          <p>The Headspace Chrome Extension lets you start and stop timers from any browser tab without opening the full app. It connects directly to your self-hosted Headspace server on the local network.</p>
+          <StepList steps={[
+            { n:1, title:'Get the extension files', desc:'The chrome-extension/ folder is included in every Headspace release zip. Download the latest zip from GitHub.' },
+            { n:2, title:'Load in Chrome', desc:'Open Chrome and go to chrome://extensions. Enable Developer mode (toggle, top right). Click Load unpacked and select the chrome-extension/ folder.' },
+            { n:3, title:'Pin it', desc:'Click the puzzle-piece icon in Chrome toolbar, find Headspace Time Tracker and click the pin icon. The pink H logo will appear in your toolbar.' },
+            { n:4, title:'Configure server URL', desc:'Click the extension icon. Scroll to the bottom. Confirm the server URL matches your NAS address — default is http://192.168.10.103:5151. Click Save.' },
+            { n:5, title:'Start tracking', desc:'Pick a project from the dropdown, type what you are working on, and click Start. The live timer ticks in the popup. Click Stop when done. Today's sessions appear in the list below.' },
+          ]} />
+          <Callout icon="🌐">
+            The extension works on any Windows or Mac machine on the same local network as the Ubuntu NAS. No internet connection is needed — everything stays local.
+          </Callout>
+        </Section>
+
         <Section id="tips" title="Tips and Workflow">
           <TipGrid tips={[
             { icon:'🌅', title:'Daily review', desc:'Open Headspace each morning. Skim yesterday\'s entries. Write today\'s first note. It takes 2 minutes and builds a habit.' },
@@ -199,6 +230,24 @@ We discussed @Headspace and the #product roadmap.`}
             { icon:'📱', title:'Mobile-friendly', desc:'Headspace works in the mobile browser. The bottom navigation replaces the sidebar on small screens.' },
             { icon:'🔒', title:'Your data, your rules', desc:'Everything lives on your server. No one else has access. Back up the data/ folder regularly and you\'re fully protected.' },
           ]} />
+        </Section>
+
+      </div>
+
+        <Section id="credits" title="Credits">
+          <p>Headspace is a self-hosted personal knowledge management and diary application — built for privacy, longevity, and local ownership.</p>
+          <p style={{ marginTop: 12 }}>
+            Developed by{' '}
+            <a href="https://github.com/sunnyrabiussunny/headspace"
+              target="_blank" rel="noopener noreferrer"
+              style={{ color:'var(--accent-teal)', fontWeight:600, textDecoration:'underline', textUnderlineOffset:2 }}>
+              Sunny Rabius Sunny
+            </a>
+            {' '}— the source code, issues, and release zips are all on GitHub.
+          </p>
+          <Callout icon="⭐">
+            If Headspace is useful to you, consider starring the repository on GitHub. It helps others find it and motivates continued development.
+          </Callout>
         </Section>
 
       </div>

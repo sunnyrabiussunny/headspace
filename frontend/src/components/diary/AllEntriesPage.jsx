@@ -9,9 +9,16 @@ import styles from './AllEntriesPage.module.css'
 
 export default function AllEntriesPage() {
   const location   = useLocation()
-  const initialTag = new URLSearchParams(location.search).get('tag') || null
   const [entries,   setEntries]   = useState([])
-  const [activeTag, setActiveTag] = useState(initialTag)
+  const [activeTag, setActiveTag] = useState(
+    new URLSearchParams(location.search).get('tag') || null
+  )
+
+  // Sync activeTag when URL changes (e.g. from Tags page eye icon)
+  useEffect(() => {
+    const tag = new URLSearchParams(location.search).get('tag') || null
+    setActiveTag(tag)
+  }, [location.search])
   const [viewingId, setViewingId] = useState(null)   // read view
   const [editingId, setEditingId] = useState(null)   // edit view
   const [loading,   setLoading]   = useState(true)

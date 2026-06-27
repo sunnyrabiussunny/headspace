@@ -269,8 +269,7 @@ export default function ObjectDetailPage() {
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
       const frag = before.slice(atIdx + 1)
-      const alreadyUsed = lastInsertEndRef.current > 0 && atIdx < lastInsertEndRef.current
-      if (!frag.includes('\n') && !alreadyUsed) {
+      if (!frag.includes('\n')) {
         anchorRef.current = atIdx
         setQuery(frag)
         return
@@ -346,7 +345,11 @@ export default function ObjectDetailPage() {
 
   const handleSaveMeta = async () => {
     try {
-      const saved = await updateObject(id, { description: editDesc, type: editType })
+      // Extract tags from both description and existing notes
+      const descTags = extractTagsFromText(editDesc)
+      const notesTags = extractTagsFromText(toDisplay(segsRef.current))
+      const mergedTags = [...new Set([...descTags, ...notesTags])]
+      const saved = await updateObject(id, { description: editDesc, type: editType, tags: mergedTags })
       setObj(saved)
       setEditMeta(false)
       toast.success('Updated')

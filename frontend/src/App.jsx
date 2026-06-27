@@ -23,6 +23,7 @@ const NAV_ITEMS = [
 
 export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('hs-theme') || 'dark')
+  const [showGuide, setShowGuide] = useState(() => !localStorage.getItem('hs-guide-seen'))
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -83,6 +84,28 @@ export default function App() {
           </Routes>
         </main>
       </div>
+
+      {/* ── Floating Guide button (first-time users) ── */}
+      {showGuide && (
+        <div style={{
+          position:'fixed', bottom:72, right:20, zIndex:500,
+          background:'var(--accent-teal)', color:'var(--bg-primary)',
+          borderRadius:28, padding:'10px 18px', fontSize:13, fontWeight:700,
+          boxShadow:'0 4px 20px rgba(0,0,0,0.4)',
+          display:'flex', alignItems:'center', gap:8, cursor:'pointer',
+          animation:'floatIn 0.4s ease',
+        }} onClick={() => {
+          localStorage.setItem('hs-guide-seen','1')
+          setShowGuide(false)
+          window.location.href = '/export#guide'
+        }}>
+          📖 New here? Read the guide
+          <button style={{marginLeft:8, opacity:0.7, fontSize:16, lineHeight:1}}
+            onClick={e => { e.stopPropagation(); localStorage.setItem('hs-guide-seen','1'); setShowGuide(false) }}>
+            ×
+          </button>
+        </div>
+      )}
 
       {/* ── Mobile bottom nav ── */}
       <nav className={styles.bottomNav}>

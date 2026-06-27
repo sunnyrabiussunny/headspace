@@ -7,7 +7,7 @@ import {
 } from 'date-fns'
 import toast from 'react-hot-toast'
 import { getDatesWithEntries, getEntriesForDate, createEntry, deleteEntry } from '../../api'
-import { getEntries as getTimeEntries, getProjects as getTimeProjects, fmtHours } from '../../api_time'
+import { getEntries as getTimeEntries, getProjects as getTimeProjects, fmtHours, fmtDuration } from '../../api_time'
 import DiaryEntryCard from './DiaryEntryCard'
 import DiaryEditor from './DiaryEditor'
 import styles from './DiaryPage.module.css'
@@ -176,13 +176,56 @@ export default function DiaryPage() {
 
           <div className={styles.divider} />
 
-          {/* Entries */}
+          {/* Entries + Time entries interleaved by timestamp */}
           <div className={styles.list}>
-            {entries.map(entry =>
-              editingId === entry.id
-                ? <DiaryEditor key={entry.id} entry={entry} onSave={handleSaved} onClose={() => setEditingId(null)} onDelete={() => handleDelete(entry.id)} />
-                : <DiaryEntryCard key={entry.id} entry={entry} onClick={() => setEditingId(entry.id)} onDelete={() => handleDelete(entry.id)} />
-            )}
+            {(() => {
+              const projMap = Object.fromEntries(timeProjects.map(p => [p.id, p]))
+              // Build merged list of diary entries and time entries, sorted by time
+              const diaryItems = entries.map(e => ({
+                kind: 'diary',
+                time: e.created_at ? new Date(e.created_at).getTime() : 0,
+                entry: e
+              }))
+              const timeItems = dayTimeEntries.map(e => ({
+                kind: 'time',
+                time: e.start_time ? new Date(e.start_time).getTime() : 0,
+                entry: e
+              }))
+              const merged = [...diaryItems, ...timeItems].sort((a, b) => a.time - b.time)
+              return merged.map(item => {
+                if (item.kind === 'diary') {
+                  const entry = item.entry
+                  return editingId === entry.id
+                    ? <DiaryEditor key={entry.id} entry={entry} onSave={handleSaved} onClose={() => setEditingId(null)} onDelete={() => handleDelete(entry.id)} />
+                    : <DiaryEntryCard key={entry.id} entry={entry} onClick={() => setEditingId(entry.id)} onDelete={() => handleDelete(entry.id)} />
+                } else {
+                  const te = item.entry
+                  const proj = projMap[te.project_id]
+                  const startStr = te.start_time ? format(parseISO(te.start_time), 'h:mm a') : ''
+                  const endStr   = te.end_time   ? format(parseISO(te.end_time),   'h:mm a') : 'running'
+                  return (
+                    <div key={`time-${te.id}`} className={styles.timeEntryCard}>
+                      <div className={styles.timeEntryHeader}>
+                        <span className={styles.timeEntryBadge}>⏱ Timer</span>
+                        <span className={styles.timeEntryRange}>{startStr} → {endStr}</span>
+                        <span className={styles.timeEntryDur}>{fmtHours(te.duration)}</span>
+                      </div>
+                      <div className={styles.timeEntryBody}>
+                        <span className={styles.timeEntryProj}
+                          style={{ color: proj?.color || 'var(--accent-teal)' }}>
+                          {proj?.name || 'Unknown project'}
+                        </span>
+                        {te.description && (
+                          <span className={styles.timeEntryDesc}>
+                            {te.description.replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                }
+              })
+            })()}
             <button className={styles.addBtn} onClick={handleAddEntry}>
               <PlusIcon /> Daily Note
             </button>

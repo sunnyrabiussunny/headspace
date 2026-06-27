@@ -5,8 +5,8 @@ import styles from './DiaryEditor.module.css'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
 const TAG_RE     = /#([a-zA-Z0-9_\-]+)/g
-const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢', MEDIA:'🎬' }
-const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION','MEDIA']
+const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢', MEDIA:'🎬', PAGE:'📄' }
+const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION','MEDIA','PAGE']
 
 const TEMPLATES = [
   {
@@ -168,8 +168,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     const atIdx  = before.lastIndexOf('@')
     if (atIdx >= 0) {
       const frag = before.slice(atIdx + 1)
-      const alreadyUsed = lastInsertEndRef.current > 0 && atIdx < lastInsertEndRef.current
-      if (!frag.includes('\n') && !alreadyUsed) {
+      if (!frag.includes('\n')) {
         anchorRef.current = atIdx
         setQuery(frag)
         return
