@@ -235,7 +235,8 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     const current = ta.value
     const newVal = current ? current + '\n\n' + tpl.text : tpl.text
     ta.value = newVal
-    segsRef.current = [{ type: 'text', val: newVal }]
+    // Use reconcile to preserve any existing @mention segments
+    segsRef.current = reconcile(segsRef.current, newVal)
     ta.focus()
     ta.setSelectionRange(newVal.length, newVal.length)
     setShowTemplates(false)
@@ -285,7 +286,8 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     setTagQuery(null)
     setTagResults([])
     setTags(extractTags(newVal))
-    segsRef.current = [{ type: 'text', val: newVal }]
+    // CRITICAL: use reconcile, not plain replacement — preserves existing @mention segments
+    segsRef.current = reconcile(segsRef.current, newVal)
     save()
   }, [save])
 

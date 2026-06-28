@@ -487,8 +487,20 @@ export default function ObjectDetailPage() {
       {/* Notes */}
       <div className={styles.notesWrap}>
         {!isEditing ? (
-          <div className={styles.notesReadView} onClick={() => setIsEditing(true)} title="Click to edit">
-            {renderRichNotes(notesMd, navigate)}
+          <div className={styles.notesReadView} title="Click blank area to edit">
+            {notesMd
+              ? notesMd.split('\n').map((line, i) => (
+                  <p key={i} className={styles.notesLine}
+                    onClick={() => setIsEditing(true)}
+                    style={{ cursor:'text', minHeight:'1.7em', margin:'0 0 2px' }}>
+                    {renderRichNotes(line, navigate) || (line ? line : <br />)}
+                  </p>
+                ))
+              : <span style={{ color:'var(--text-muted)', fontSize:14, cursor:'text' }}
+                  onClick={() => setIsEditing(true)}>
+                  Click to add notes... (type @ to link objects, # for tags)
+                </span>
+            }
           </div>
         ) : (
           <>
