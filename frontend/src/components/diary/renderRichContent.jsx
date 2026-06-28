@@ -1,82 +1,99 @@
 import React from 'react'
 
 /**
- * renderRichContent — shared renderer for diary entries everywhere they appear in read view.
+ * renderRichContent — parses diary/object content and renders:
+ *   @[Name](id)   → teal span, click navigates to object page (stopPropagation)
+ *   @Name         → teal span, no navigation (no id available)
+ *   https://...   → real <a> link, opens new tab (stopPropagation)
+ *   #tag          → teal span, click calls onTagClick (stopPropagation)
+ *   plain text    → <span>
  *
- * Handles in priority order (all matched in one pass):
- *   @[Name](objectId)   — structured mention from popup → teal, clickable, navigates to object
- *   @Word / @First Last — plain @mention typed manually → teal color, no navigation
- *   https://...         — URLs → real <a> tag, opens in new tab
- *   #tagname            — hashtags → teal, clickable, filters entries by tag
+ * All interactive elements call e.stopPropagation() so parent card
+ * onClick handlers are never triggered when a link/tag is clicked.
  */
-export function renderRichContent(content, { navigate, onTagClick } = {}) {
-  if (!content || !content.trim()) return null
+export function renderRichContent(text, { navigate, onTagClick } = {}) {
+  if (!text || !text.trim()) return null
 
-  // Combined regex — order matters: structured mention first, then URL, then plain @, then #tag
-  const combined = /@\[([^\]]+)\]\(([^)]+)\)|https?:\/\/[^\s\)\]"']+|@[a-zA-Z][\w ]{0,40}|#([a-zA-Z][a-zA-Z0-9_-]+)/g
+  // One combined regex — order matters (structured @[...] before plain @)
+  const RE = /@\[([^\]]+)\]\(([^)]+)\)|https?:\/\/[^\s<>"')\]]+|@([A-Za-z]\w{0,60}(?:\s[A-Z]\w{0,30})?)|#([a-zA-Z][a-zA-Z0-9_-]{0,39})/g
 
   const parts = []
-  let last = 0, m, key = 0
-  combined.lastIndex = 0
+  let last = 0, key = 0, m
+  RE.lastIndex = 0
 
-  while ((m = combined.exec(content)) !== null) {
-    // Plain text before match
+  while ((m = RE.exec(text)) !== null) {
+    // Text before this match
     if (m.index > last) {
-      parts.push(<span key={key++}>{content.slice(last, m.index)}</span>)
+      parts.push(<span key={key++}>{text.slice(last, m.index)}</span>)
     }
 
     const full = m[0]
 
-    if (full.startsWith('@[')) {
-      // Structured mention: @[Name](id)
+    if (m[1] !== undefined) {
+      // @[Name](id) — structured mention with object id
       const name  = m[1]
       const objId = m[2]
       parts.push(
-        <span key={key++}
+        <span
+          key={key++}
+          onClick={e => { e.stopPropagation(); e.preventDefault(); navigate?.(`/objects/${objId}`) }}
           style={{
             color: 'var(--accent-teal)',
             fontWeight: 600,
             cursor: navigate ? 'pointer' : 'default',
-            borderBottom: '1px solid color-mix(in srgb, var(--accent-teal) 40%, transparent)',
+            textDecoration: 'underline',
+            textDecorationColor: 'color-mix(in srgb, var(--accent-teal) 40%, transparent)',
+            textUnderlineOffset: '2px',
           }}
-          onClick={e => { e.stopPropagation(); navigate?.(`/objects/${objId}`) }}>
+        >
           {name}
         </span>
       )
+
     } else if (full.startsWith('http')) {
       // URL
       let display = full.replace(/^https?:\/\/(www\.)?/, '')
-      if (display.length > 50) display = display.slice(0, 50) + '…'
+      if (display.length > 50) display = display.slice(0, 47) + '…'
       parts.push(
-        <a key={key++}
+        <a
+          key={key++}
           href={full}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
           style={{
             color: 'var(--accent-teal)',
             textDecoration: 'underline',
             textUnderlineOffset: '2px',
             wordBreak: 'break-all',
+            cursor: 'pointer',
           }}
-          onClick={e => e.stopPropagation()}>
+        >
           {display}
         </a>
       )
-    } else if (full.startsWith('@')) {
-      // Plain @Name typed manually — color it but can't navigate (no id)
+
+    } else if (m[3] !== undefined) {
+      // @Name — plain mention (no id, can't navigate)
       parts.push(
-        <span key={key++}
-          style={{ color: 'var(--accent-teal)', fontWeight: 600 }}>
+        <span key={key++} style={{ color: 'var(--accent-teal)', fontWeight: 600 }}>
           {full}
         </span>
       )
-    } else if (full.startsWith('#')) {
+
+    } else if (m[4] !== undefined) {
       // #tag
-      const tagName = m[3]
+      const tagName = m[4]
       parts.push(
-        <span key={key++}
-          style={{ color: 'var(--accent-teal)', fontWeight: 500, cursor: 'pointer' }}
-          onClick={e => { e.stopPropagation(); onTagClick?.(tagName) }}>
+        <span
+          key={key++}
+          onClick={e => { e.stopPropagation(); onTagClick?.(tagName) }}
+          style={{
+            color: 'var(--accent-teal)',
+            fontWeight: 500,
+            cursor: onTagClick ? 'pointer' : 'default',
+          }}
+        >
           {full}
         </span>
       )
@@ -85,8 +102,8 @@ export function renderRichContent(content, { navigate, onTagClick } = {}) {
     last = m.index + full.length
   }
 
-  if (last < content.length) {
-    parts.push(<span key={key++}>{content.slice(last)}</span>)
+  if (last < text.length) {
+    parts.push(<span key={key++}>{text.slice(last)}</span>)
   }
 
   return parts.length > 0 ? parts : null

@@ -1,9 +1,8 @@
-/* ── Grid page ── */
-.page { padding: 20px 24px 60px; max-width: 960px; margin: 0 auto; }
-
-.header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
-.title  { font-size: 22px; font-weight: 700; color: var(--text-primary); }
-.count  { font-size: 13px; color: var(--text-muted); }
+/* ── Page ── */
+.page    { padding: 20px 24px 60px; max-width: 960px; margin: 0 auto; }
+.header  { display: flex; align-items: baseline; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.title   { font-size: 22px; font-weight: 700; color: var(--text-primary); }
+.count   { font-size: 13px; color: var(--text-muted); }
 
 .filterBadge {
   display: flex; align-items: center; gap: 6px;
@@ -13,87 +12,99 @@
 }
 .clearFilter { color: var(--accent-teal); font-size: 16px; line-height: 1; }
 
-.feed { display: flex; flex-direction: column; gap: 36px; }
-
-.dateLabel { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.dateBadge { font-size: 11px; font-weight: 700; color: var(--accent-green); text-transform: uppercase; letter-spacing: 0.06em; }
+/* ── Feed ── */
+.feed       { display: flex; flex-direction: column; gap: 36px; }
+.dateLabel  { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.dateBadge  { font-size: 11px; font-weight: 700; color: var(--accent-green); text-transform: uppercase; letter-spacing: 0.06em; }
 .dateDayCount { font-size: 11px; color: var(--text-muted); background: var(--bg-card); padding: 1px 8px; border-radius: 10px; }
 
+/* ── Card grid ── */
 .cardGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 
+/* ── Card ── */
 .card {
   background: var(--bg-card); border-radius: var(--border-radius);
-  padding: 12px 14px 10px; cursor: pointer;
-  border: 1px solid transparent; min-height: 120px; max-height: 160px;
-  overflow: hidden; display: flex; flex-direction: column; gap: 6px;
-  position: relative; transition: background 0.12s, border-color 0.12s, transform 0.1s;
+  border: 1px solid var(--divider);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: border-color 0.12s, transform 0.1s;
+  min-height: 140px;
 }
-.card:hover { background: var(--bg-hover); border-color: var(--divider); transform: translateY(-1px); }
+.card:hover { border-color: var(--accent-teal); transform: translateY(-1px); }
 
-.cardHeader { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-.cardTime   { font-size: 11px; color: var(--text-muted); }
-.cardDel    { font-size: 16px; color: var(--text-muted); opacity: 0; padding: 0 2px; transition: opacity 0.12s, color 0.12s; }
+.cardHeader {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px 4px; flex-shrink: 0;
+}
+.cardTime { font-size: 11px; color: var(--text-muted); }
+.cardDel  { font-size: 16px; color: var(--text-muted); opacity: 0; padding: 0 2px; transition: opacity 0.12s, color 0.12s; }
 .card:hover .cardDel { opacity: 1; }
 .cardDel:hover { color: var(--accent-red); }
 
+/* Preview area — clicking blank space opens entry */
+.cardPreviewArea { flex: 1; padding: 0 12px; cursor: pointer; }
 .cardPreview {
   font-size: 13px; line-height: 1.55; color: var(--text-secondary);
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical;
-  flex: 1; word-break: break-word; white-space: pre-wrap;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+  overflow: hidden; word-break: break-word;
 }
 .emptyNote { color: var(--text-muted); font-style: italic; }
-.card::after {
-  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 32px;
-  background: linear-gradient(transparent, var(--bg-card)); pointer-events: none;
-  border-radius: 0 0 var(--border-radius) var(--border-radius);
-}
-.card:hover::after { background: linear-gradient(transparent, var(--bg-hover)); }
 
-.cardTagRow { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; }
+.cardTagRow { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 12px; }
 .cardTag    { font-size: 11px; color: var(--accent-teal); font-weight: 500; cursor: pointer; }
 .cardTag:hover { text-decoration: underline; }
+
+/* Open button — always visible at bottom of card */
+.cardOpenBtn {
+  font-size: 11px; color: var(--text-muted);
+  padding: 6px 12px; text-align: right; border-top: 1px solid var(--divider);
+  background: var(--bg-secondary); cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+.cardOpenBtn:hover { color: var(--accent-teal); background: var(--bg-hover); }
 
 .empty { color: var(--text-muted); text-align: center; padding: 80px 0; font-size: 14px; }
 
 /* ── Read view ── */
-.readPage { padding: 0; display: flex; flex-direction: column; height: 100%; }
+.readPage { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 
 .readTopBar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 24px; border-bottom: 1px solid var(--divider);
   background: var(--bg-primary); flex-shrink: 0;
 }
-
 .backBtn {
   font-size: 13px; color: var(--text-secondary);
   display: flex; align-items: center; gap: 6px; transition: color 0.12s;
 }
 .backBtn:hover { color: var(--text-primary); }
-
 .editBtn {
-  font-size: 13px; font-weight: 600;
-  padding: 6px 14px; border-radius: var(--radius-sm);
-  background: var(--bg-card); color: var(--text-primary);
-  border: 1px solid var(--divider); transition: background 0.12s;
+  font-size: 13px; font-weight: 600; padding: 6px 14px;
+  border-radius: var(--radius-sm); background: var(--bg-card);
+  color: var(--text-primary); border: 1px solid var(--divider); transition: background 0.12s;
 }
 .editBtn:hover { background: var(--bg-hover); }
 
 .readCard {
   flex: 1; overflow-y: auto;
-  padding: 32px 10%;     /* 10% sides = 80% width */
-  max-width: 860px; margin: 0 auto; width: 100%;
+  padding: 32px min(10%, 80px);
+  max-width: 800px; margin: 0 auto; width: 100%;
+  box-sizing: border-box;
 }
 
 .readMeta {
-  display: flex; align-items: baseline; gap: 12px; margin-bottom: 24px;
+  display: flex; align-items: baseline; gap: 12px; margin-bottom: 28px;
   padding-bottom: 16px; border-bottom: 1px solid var(--divider);
 }
 .readDate { font-size: 20px; font-weight: 700; color: var(--text-primary); }
 .readTime { font-size: 13px; color: var(--text-muted); }
 
-.readContent {
+/* Line-by-line content rendering */
+.readContent { display: flex; flex-direction: column; gap: 2px; min-height: 50vh; }
+.readLine {
   font-size: 15px; line-height: 1.8; color: var(--text-primary);
-  white-space: pre-wrap; word-break: break-word; min-height: 60vh;
+  word-break: break-word; min-height: 1.8em;
+  margin: 0;
 }
 
 .readTags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
@@ -108,7 +119,6 @@
   font-size: 13px; padding: 6px 14px; border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--accent-red) 10%, transparent);
   color: var(--accent-red); border: 1px solid color-mix(in srgb, var(--accent-red) 20%, transparent);
-  transition: background 0.12s;
 }
 .delBtn:hover { background: color-mix(in srgb, var(--accent-red) 20%, transparent); }
 
@@ -126,5 +136,4 @@
   .page { padding: 16px 14px 80px; }
   .cardGrid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .readCard { padding: 20px 16px; }
-  .readContent { min-height: 40vh; }
 }
