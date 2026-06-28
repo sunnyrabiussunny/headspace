@@ -212,7 +212,7 @@ We discussed @Headspace and the #product roadmap.`}
             { n:2, title:'Load in Chrome', desc:'Open Chrome and go to chrome://extensions. Enable Developer mode (toggle, top right). Click Load unpacked and select the chrome-extension/ folder.' },
             { n:3, title:'Pin it', desc:'Click the puzzle-piece icon in Chrome toolbar, find Headspace Time Tracker and click the pin icon. The pink H logo will appear in your toolbar.' },
             { n:4, title:'Configure server URL', desc:'Click the extension icon. Scroll to the bottom. Confirm the server URL matches your NAS address — default is http://192.168.10.103:5151. Click Save.' },
-            { n:5, title:'Start tracking', desc:'Pick a project from the dropdown, type what you are working on, and click Start. The live timer ticks in the popup. Click Stop when done. Today's sessions appear in the list below.' },
+            { n:5, title:'Start tracking', desc:'Pick a project from the dropdown, type what you are working on, and click Start. The live timer ticks in the popup. Click Stop when done. Today\'s sessions appear in the list below.' },
           ]} />
           <Callout icon="🌐">
             The extension works on any Windows or Mac machine on the same local network as the Ubuntu NAS. No internet connection is needed — everything stays local.

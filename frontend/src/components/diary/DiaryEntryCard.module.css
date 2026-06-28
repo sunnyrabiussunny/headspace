@@ -43,3 +43,25 @@
 
 .empty { color: var(--text-muted); }
 .tags  { margin-top: 8px; }
+
+/* ── Separated click zones ── */
+.previewArea {
+  flex: 1;
+  padding: 0 14px 4px;
+  cursor: pointer;
+}
+
+.editHint {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 5px 14px 8px;
+  text-align: right;
+  cursor: pointer;
+  border-top: 1px solid var(--divider);
+  background: var(--bg-secondary);
+  transition: color 0.12s;
+}
+
+.editHint:hover {
+  color: var(--accent-teal);
+}
