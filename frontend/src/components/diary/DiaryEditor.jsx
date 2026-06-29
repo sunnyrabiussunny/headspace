@@ -86,6 +86,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   const [tagResults, setTagResults] = useState([])
   const [tagSelIdx,  setTagSelIdx]  = useState(0)
   const tagAnchorRef = useRef(-1)
+  const [popupTop,   setPopupTop]   = useState(null)  // px from top of .body
 
   // Mount
   useEffect(() => {
@@ -123,6 +124,20 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     if (tagQuery === null) { setTagResults([]); setTagSelIdx(0); return }
     searchTags(tagQuery).then(r => { setTagResults(r.slice(0,8)); setTagSelIdx(0) }).catch(() => {})
   }, [tagQuery])
+
+  // Compute caret Y position inside textarea for popup placement
+  const updatePopupPos = (ta) => {
+    if (!ta) return
+    const lineHeight = 24  // approximate px per line (matches font-size ~15px * 1.6)
+    const text = ta.value.slice(0, ta.selectionStart)
+    const lines = text.split('\n')
+    const lineNum = lines.length - 1
+    const taTop = ta.offsetTop || 0
+    const scrollTop = ta.scrollTop || 0
+    const caretY = taTop + lineNum * lineHeight - scrollTop + lineHeight + 4
+    // Clamp so popup doesn't go off screen — keep within body container
+    setPopupTop(Math.max(taTop + 4, caretY))
+  }
 
   // Save debounced
   const save = useCallback((extraData = {}) => {
@@ -171,6 +186,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
       if (!frag.includes('\n')) {
         anchorRef.current = atIdx
         setQuery(frag)
+        updatePopupPos(ta)
         return
       }
     }
@@ -184,6 +200,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
       if (/^[a-zA-Z0-9_-]*$/.test(frag) && !frag.includes(' ')) {
         tagAnchorRef.current = hashIdx
         setTagQuery(frag)
+        updatePopupPos(ta)
         return
       }
     }
@@ -389,7 +406,8 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
 
         {/* Tag autocomplete popup */}
         {tagQuery !== null && tagResults.length > 0 && (
-          <div className={styles.popup}>
+          <div className={styles.popup}
+            style={popupTop ? { top: popupTop } : { top: 0 }}>
             <div className={styles.popupHint}># Tag suggestions · Enter/Tab to insert</div>
             {tagResults.map((t, i) => (
               <div key={t.name}
@@ -406,7 +424,8 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
 
         {/* Mention popup */}
         {query !== null && (
-          <div className={styles.popup}>
+          <div className={styles.popup}
+            style={popupTop ? { top: popupTop } : { top: 0 }}>
             <div className={styles.popupHint}>↑↓ navigate · Enter select · Esc close</div>
             {results.length === 0 && query.length > 0 && (
               <div className={styles.popupEmpty}>No objects match "{query}"</div>

@@ -529,7 +529,7 @@ export default function ObjectDetailPage() {
           </>
         )}
         {query !== null && (
-          <div className={styles.popup}>
+          <div className={styles.popup} style={{ top: popupTop || 0 }}>
             <div className={styles.popupHint}>↑↓ navigate · Enter select · Esc close</div>
             {results.length === 0 && query.length > 0 && (
               <div className={styles.popupEmpty}>No objects match "{query}"</div>

@@ -39,13 +39,16 @@
 
 /* Popup sits BELOW the textarea — no overlap with header */
 .popup {
-  background: #1e1e1e;
-  border: 1px solid #383838;
-  border-top: none;
-  border-radius: 0 0 10px 10px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.5);
-  z-index: 200;
-  max-height: 300px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Will be positioned via JS inline style top, or defaults to below textarea */
+  background: var(--bg-card);
+  border: 1px solid var(--accent-teal);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  z-index: 300;
+  max-height: 260px;
   overflow-y: auto;
 }
 
