@@ -65,39 +65,43 @@ function reconcile(oldSegs, newDisplay) {
     ? [{ type:'text', val: newDisplay }]
     : out
 }
-function renderRichNotes(md, navigate) {
-  if (!md || !md.trim()) {
-    return <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>Click to add notes... (type @ to link an object)</span>
-  }
-  const combined = /@\[([^\]]+)\]\(([^)]+)\)|https?:\/\/[^\s\)\]]+/g
+function renderRichNotes(line, navigate) {
+  if (!line || !line.trim()) return null
+  // Use real <a> tags for mentions so clicks always work regardless of parent onClick
+  const RE = /@\[([^\]]+)\]\(([^)]+)\)|https?:\/\/[^\s\)\]"'<>]+|@[a-zA-Z]\w{0,39}|#([a-zA-Z][a-zA-Z0-9_-]+)/g
   const parts = []; let last = 0, m, key = 0
-  combined.lastIndex = 0
-  while ((m = combined.exec(md)) !== null) {
-    if (m.index > last) parts.push(<span key={key++}>{md.slice(last, m.index)}</span>)
+  RE.lastIndex = 0
+  while ((m = RE.exec(line)) !== null) {
+    if (m.index > last) parts.push(<span key={key++}>{line.slice(last, m.index)}</span>)
     const full = m[0]
     if (full.startsWith('@[')) {
       const name = m[1], objId = m[2]
       parts.push(
-        <span key={key++}
-          style={{ color:'var(--accent-teal)', fontWeight:600, textDecoration:'underline', textUnderlineOffset:2, cursor:'pointer' }}
-          onClick={e => { e.stopPropagation(); navigate(`/objects/${objId}`) }}>
+        <a key={key++}
+          href={`/objects/${objId}`}
+          style={{ color:'var(--accent-teal)', fontWeight:600, textDecoration:'underline', textUnderlineOffset:'2px', cursor:'pointer' }}
+          onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(`/objects/${objId}`) }}>
           {name}
-        </span>
+        </a>
       )
-    } else {
+    } else if (full.startsWith('http')) {
       const display = full.replace(/^https?:\/\/(www\.)?/, '').slice(0, 50) + (full.length > 55 ? '…' : '')
       parts.push(
         <a key={key++} href={full} target="_blank" rel="noopener noreferrer"
-          style={{ color:'var(--accent-teal)', textDecoration:'underline', textUnderlineOffset:2, wordBreak:'break-all' }}
+          style={{ color:'var(--accent-teal)', textDecoration:'underline', textUnderlineOffset:'2px', wordBreak:'break-all' }}
           onClick={e => e.stopPropagation()}>
           {display}
         </a>
       )
+    } else if (full.startsWith('@')) {
+      parts.push(<span key={key++} style={{ color:'var(--accent-teal)', fontWeight:600 }}>{full}</span>)
+    } else {
+      parts.push(<span key={key++} style={{ color:'var(--accent-teal)', fontWeight:500 }}>{full}</span>)
     }
     last = m.index + full.length
   }
-  if (last < md.length) parts.push(<span key={key++}>{md.slice(last)}</span>)
-  return parts
+  if (last < line.length) parts.push(<span key={key++}>{line.slice(last)}</span>)
+  return parts.length ? parts : null
 }
 
 function formatDate(s) {
@@ -487,18 +491,19 @@ export default function ObjectDetailPage() {
       {/* Notes */}
       <div className={styles.notesWrap}>
         {!isEditing ? (
-          <div className={styles.notesReadView} title="Click blank area to edit">
+          <div className={styles.notesReadView}>
+            {/* Edit button at top - the ONLY way to enter edit mode */}
+            <button className={styles.notesEditTrigger} onClick={() => setIsEditing(true)}>
+              ✏️ Edit notes
+            </button>
             {notesMd
               ? notesMd.split('\n').map((line, i) => (
-                  <p key={i} className={styles.notesLine}
-                    onClick={() => setIsEditing(true)}
-                    style={{ cursor:'text', minHeight:'1.7em', margin:'0 0 2px' }}>
-                    {renderRichNotes(line, navigate) || (line ? line : <br />)}
+                  <p key={i} className={styles.notesLine}>
+                    {renderRichNotes(line, navigate) || (line ? <span>{line}</span> : <br />)}
                   </p>
                 ))
-              : <span style={{ color:'var(--text-muted)', fontSize:14, cursor:'text' }}
-                  onClick={() => setIsEditing(true)}>
-                  Click to add notes... (type @ to link objects, # for tags)
+              : <span style={{ color:'var(--text-muted)', fontSize:14 }}>
+                  No notes yet. Click Edit notes above to start writing.
                 </span>
             }
           </div>

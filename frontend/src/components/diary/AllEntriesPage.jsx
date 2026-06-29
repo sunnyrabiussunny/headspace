@@ -120,7 +120,7 @@ export default function AllEntriesPage() {
                       {renderRichContent(line, {
                         navigate,
                         onTagClick: (tag) => { setViewingId(null); setActiveTag(tag) }
-                      }) || (line ? line : <br />)}
+                      }) || (line ? <span>{line}</span> : <br />)}
                     </p>
                   ))
                 : <span className={styles.emptyNote}>Empty — click Edit to write.</span>
@@ -204,16 +204,20 @@ export default function AllEntriesPage() {
                         </button>
                       </div>
 
-                      {/* Content preview — clicking links works; clicking blank space opens entry */}
-                      <div className={styles.cardPreviewArea}
-                        onClick={() => setViewingId(entry.id)}>
-                        <p className={styles.cardPreview}>
-                          {/* Render rich content — @mention clicks navigate to objects */}
-                          {renderRichContent(entry.content, {
-                            navigate,
-                            onTagClick: (tag) => setActiveTag(tag)
-                          }) || <span className={styles.emptyNote}>Empty note</span>}
-                        </p>
+                      {/* Content — NO onClick here. Links are real <a> tags.
+                          Click "Open" button below to open the entry. */}
+                      <div className={styles.cardPreviewArea}>
+                        {entry.content
+                          ? entry.content.split('\n').slice(0, 4).map((line, i) => (
+                              <p key={i} className={styles.cardPreview}>
+                                {renderRichContent(line, {
+                                  navigate,
+                                  onTagClick: tag => setActiveTag(tag)
+                                }) || (line ? <span style={{color:'var(--text-muted)'}}>{line}</span> : null)}
+                              </p>
+                            ))
+                          : <span className={styles.emptyNote}>Empty note</span>
+                        }
                       </div>
 
                       {cleanTags.length > 0 && (

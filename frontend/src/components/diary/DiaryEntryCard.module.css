@@ -4,52 +4,49 @@
   border: 1px solid var(--divider);
   margin-bottom: 8px;
   overflow: hidden;
-  transition: border-color 0.15s;
-}
-
-.card:hover {
-  border-color: color-mix(in srgb, var(--accent-teal) 40%, transparent);
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px 6px;
+  padding: 8px 12px 4px;
 }
 
 .time {
-  display: flex;
-  align-items: center;
-  gap: 5px;
   font-size: 12px;
   color: var(--text-muted);
 }
 
-.delBtn {
-  color: var(--text-muted);
-  padding: 2px 4px;
-  border-radius: 4px;
+.actions {
+  display: flex;
+  gap: 4px;
   opacity: 0;
-  transition: opacity 0.12s, color 0.12s;
+  transition: opacity 0.12s;
 }
+.card:hover .actions { opacity: 1; }
 
-.card:hover .delBtn { opacity: 1; }
-.delBtn:hover { color: var(--accent-red); }
+.editBtn, .delBtn {
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  transition: color 0.12s, background 0.12s;
+}
+.editBtn:hover { color: var(--accent-teal); background: var(--bg-hover); }
+.delBtn:hover  { color: var(--accent-red);  background: var(--bg-hover); }
 
-/* Content area — clicking blank text opens editor */
+/* Content — no onClick, links are real <a> tags */
 .content {
-  padding: 2px 14px 12px;
-  cursor: pointer;
+  padding: 2px 12px 8px;
 }
 
 .line {
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--text-secondary);
   word-break: break-word;
   margin: 0 0 2px;
-  min-height: 1.6em;
+  min-height: 1.65em;
 }
 
 .empty {
@@ -62,5 +59,21 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 0 14px 10px;
+  padding: 0 12px 8px;
 }
+
+/* Click-to-edit strip */
+.editStrip {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 4px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.card:hover .editStrip { opacity: 1; }
+.editStrip:hover { color: var(--accent-teal); }
