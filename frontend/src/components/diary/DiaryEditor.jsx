@@ -125,18 +125,13 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
     searchTags(tagQuery).then(r => { setTagResults(r.slice(0,8)); setTagSelIdx(0) }).catch(() => {})
   }, [tagQuery])
 
-  // Compute caret Y position inside textarea for popup placement
   const updatePopupPos = (ta) => {
     if (!ta) return
-    const lineHeight = 24  // approximate px per line (matches font-size ~15px * 1.6)
-    const text = ta.value.slice(0, ta.selectionStart)
-    const lines = text.split('\n')
-    const lineNum = lines.length - 1
-    const taTop = ta.offsetTop || 0
-    const scrollTop = ta.scrollTop || 0
-    const caretY = taTop + lineNum * lineHeight - scrollTop + lineHeight + 4
-    // Clamp so popup doesn't go off screen — keep within body container
-    setPopupTop(Math.max(taTop + 4, caretY))
+    const rect = ta.getBoundingClientRect()
+    const lh = parseInt(getComputedStyle(ta).lineHeight) || 24
+    const lineNum = (ta.value.slice(0, ta.selectionStart).match(/\n/g) || []).length
+    const caretY = rect.top + lineNum * lh - (ta.scrollTop || 0) + lh + 4
+    setPopupTop(Math.min(Math.max(rect.top + 4, caretY), window.innerHeight - 290))
   }
 
   // Save debounced
@@ -407,7 +402,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
         {/* Tag autocomplete popup */}
         {tagQuery !== null && tagResults.length > 0 && (
           <div className={styles.popup}
-            style={popupTop ? { top: popupTop } : { top: 0 }}>
+            style={{ top: popupTop || 200, left: (() => { try { const r = taRef.current?.getBoundingClientRect(); return Math.min(r?.left || 24, window.innerWidth - 380) } catch(e) { return 24 } })() }}>
             <div className={styles.popupHint}># Tag suggestions · Enter/Tab to insert</div>
             {tagResults.map((t, i) => (
               <div key={t.name}
@@ -425,7 +420,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
         {/* Mention popup */}
         {query !== null && (
           <div className={styles.popup}
-            style={popupTop ? { top: popupTop } : { top: 0 }}>
+            style={{ top: popupTop || 200, left: (() => { try { const r = taRef.current?.getBoundingClientRect(); return Math.min(r?.left || 24, window.innerWidth - 380) } catch(e) { return 24 } })() }}>
             <div className={styles.popupHint}>↑↓ navigate · Enter select · Esc close</div>
             {results.length === 0 && query.length > 0 && (
               <div className={styles.popupEmpty}>No objects match "{query}"</div>

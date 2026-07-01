@@ -215,6 +215,15 @@ export default function ObjectDetailPage() {
     mentionSearch(query).then(r => { setResults(r); setSelIdx(0) }).catch(() => {})
   }, [query])
 
+  const updatePopupPos = (ta) => {
+    if (!ta) return
+    const rect = ta.getBoundingClientRect()
+    const lh = parseInt(getComputedStyle(ta).lineHeight) || 25
+    const lineNum = (ta.value.slice(0, ta.selectionStart).match(/\n/g) || []).length
+    const caretY = rect.top + lineNum * lh - (ta.scrollTop || 0) + lh + 4
+    setPopupTop(Math.min(Math.max(rect.top + 4, caretY), window.innerHeight - 290))
+  }
+
   const handleDone = useCallback(() => {
     clearTimeout(saveTimer.current)
     const md = toMd(segsRef.current)
@@ -276,6 +285,7 @@ export default function ObjectDetailPage() {
       if (!frag.includes('\n')) {
         anchorRef.current = atIdx
         setQuery(frag)
+        updatePopupPos(ta)
         return
       }
     }
@@ -529,7 +539,7 @@ export default function ObjectDetailPage() {
           </>
         )}
         {query !== null && (
-          <div className={styles.popup} style={{ top: popupTop || 0 }}>
+          <div className={styles.popup} style={{ top: popupTop || 200, left: (() => { try { const r = taRef.current?.getBoundingClientRect(); return Math.min(r?.left || 24, window.innerWidth - 380) } catch { return 24 } })() }}>
             <div className={styles.popupHint}>↑↓ navigate · Enter select · Esc close</div>
             {results.length === 0 && query.length > 0 && (
               <div className={styles.popupEmpty}>No objects match "{query}"</div>
@@ -572,7 +582,6 @@ export default function ObjectDetailPage() {
 
       {backlinks.length > 0 && (
         <div className={styles.backlinks}>
-          <div className={styles.divider} />
           <div className={styles.blHeader}>
             <span>Backlinks</span>
             <span className={styles.blCount}>{backlinks.length}</span>
@@ -601,7 +610,6 @@ export default function ObjectDetailPage() {
         })
         return (
           <div className={styles.backlinks}>
-            <div className={styles.divider} />
             <div className={styles.blHeader}>
               <span>⏱ Tracked Time</span>
               <span className={styles.blCount}>{timeEnts.length} entries</span>
