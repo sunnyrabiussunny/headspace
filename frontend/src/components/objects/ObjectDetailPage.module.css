@@ -4,9 +4,8 @@
 .page {
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
   height: 100%;
-  padding: 0 0 80px;
+  overflow: hidden;  /* toolbar stays fixed, scrollBody handles scroll */
 }
 
 /* ── Toolbar ── */
@@ -34,6 +33,15 @@
 
 /* ── Object body ── */
 .objectBody { flex: 1; padding: 20px 24px; }
+
+/* ── Scrollable body — everything below toolbar ── */
+.scrollBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px 80px;
+  display: flex;
+  flex-direction: column;
+}
 
 /* ── Type badge row ── */
 .typeRow    { display:flex; align-items:center; gap:8px; margin-bottom:8px; }

@@ -419,6 +419,8 @@ export default function ObjectDetailPage() {
         </div>
       </div>
 
+      <div className={styles.scrollBody}>
+
       <div className={styles.typeRow}>
         <span className={styles.typeBadge} style={{ background: meta.bg, color: meta.color }}>
           {meta.emoji} {obj.type}
@@ -677,6 +679,8 @@ export default function ObjectDetailPage() {
           </div>
         </div>
       )}
+
+      </div> {/* end scrollBody */}
     </div>
   )
 }
