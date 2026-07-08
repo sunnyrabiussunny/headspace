@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import { getDatesWithEntries, getEntriesForDate, createEntry, deleteEntry } from '../../api'
 import { getEntries as getTimeEntries, getProjects as getTimeProjects, fmtHours, fmtDuration } from '../../api_time'
 import DiaryEntryCard from './DiaryEntryCard'
+import HabitChecklist from './HabitChecklist'
 import DiaryEditor from './DiaryEditor'
 import styles from './DiaryPage.module.css'
 
@@ -110,6 +111,9 @@ export default function DiaryPage() {
       <div className={styles.divider} />
 
         <div className={styles.content}>
+
+          {/* Habit checklist — always at top of each day */}
+          <HabitChecklist date={format(selectedDate, 'yyyy-MM-dd')} />
 
           {/* Week strip row */}
           <div className={styles.weekNav}>

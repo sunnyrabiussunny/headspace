@@ -52,3 +52,11 @@ export const importCapacities    = (file) => {
 export const getEntryContext     = (entryId, objectId) =>
   api.get(`/diary/entry/${entryId}/context`, { params: { object_id: objectId } }).then(r => r.data)
 export const searchTags          = (q) => api.get('/tags/search', { params: { q } }).then(r => r.data)
+
+// ── Habits ─────────────────────────────────────────────────────────────────
+export const listHabits         = () => api.get('/habits').then(r => r.data)
+export const getCompletions     = (date) => api.get(`/habits/completions/${date}`).then(r => r.data)
+export const toggleHabit        = (habit_id, date) => api.post('/habits/toggle', { habit_id, date }).then(r => r.data)
+export const createHabit        = (data) => api.post('/habits', data).then(r => r.data)
+export const updateHabit        = (id, data) => api.put(`/habits/${id}`, data).then(r => r.data)
+export const deleteHabit        = (id) => api.delete(`/habits/${id}`)
