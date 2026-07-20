@@ -232,8 +232,6 @@ We discussed @Headspace and the #product roadmap.`}
           ]} />
         </Section>
 
-      </div>
-
         <Section id="credits" title="Credits">
           <p>Headspace is a self-hosted personal knowledge management and diary application — built for privacy, longevity, and local ownership.</p>
           <p style={{ marginTop: 12 }}>

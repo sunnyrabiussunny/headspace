@@ -41,15 +41,15 @@ async def init_habit_tables():
         result = await db.execute(select(Habit).limit(1))
         if result.scalar_one_or_none() is None:
             defaults = [
-                ("Contact F&Fs", "🤝"),
-                ("Read a book",  "📖"),
-                ("2 liters of water", "💧"),
-                ("Fazr",    "🌅"),
-                ("Duhr",    "☀️"),
-                ("Asr",     "🌤"),
-                ("Maghrib", "🌇"),
-                ("Isha",    "🌙"),
-                ("Exercise","🏃"),
+                ("Call F&F", "🤝"),
+                ("Read",     "📖"),
+                ("Water 2L", "💧"),
+                ("Fazr",     "🌅"),
+                ("Duhr",     "☀️"),
+                ("Asr",      "🌤"),
+                ("Maghrib",  "🌇"),
+                ("Isha",     "🌙"),
+                ("Exercise", "🏃"),
             ]
             for i, (title, icon) in enumerate(defaults):
                 db.add(Habit(
