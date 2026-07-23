@@ -162,12 +162,9 @@ export default function DiaryPage() {
           {/* Date header — NO duplicate Today text */}
           <div className={styles.dateHeader}>
             <div className={styles.dateRow1}>
-              {/* Show day name (green) OR the red Today badge — never both */}
-              {isSelectedToday ? (
-                <span className={styles.todayBadge}>Today</span>
-              ) : (
-                <span className={styles.dayLabel}>{format(selectedDate, 'EEEE')}</span>
-              )}
+              {/* Always show day name; add the red Today badge alongside it when applicable */}
+              <span className={styles.dayLabel}>{format(selectedDate, 'EEEE')}</span>
+              {isSelectedToday && <span className={styles.todayBadge}>Today</span>}
             </div>
             <div className={styles.dateRow2}>
               <h2 className={styles.dateFull}>{format(selectedDate, 'd MMMM, yyyy')}</h2>
