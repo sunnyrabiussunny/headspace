@@ -119,6 +119,7 @@
   display: flex; flex-direction: column; gap: 8px;
 }
 .addBtn {
+  flex-shrink: 0;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   padding: 16px; background: var(--bg-card); border-radius: var(--border-radius);
   color: var(--text-secondary); font-size: 14px;
@@ -129,6 +130,7 @@
 
 /* ── Day timelog section ── */
 .timelogSection {
+  flex-shrink: 0;
   margin: 16px 0 8px;
   padding: 14px 16px;
   background: var(--bg-secondary);
@@ -205,12 +207,10 @@
 
 /* ── Inline time entry card ── */
 .timeEntryCard {
-  background: color-mix(in srgb, var(--accent-teal) 6%, var(--bg-card));
-  border: 1px solid color-mix(in srgb, var(--accent-teal) 20%, transparent);
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--divider);
   border-left: 3px solid var(--accent-teal);
-  border-radius: var(--border-radius);
-  padding: 10px 14px;
-  margin-bottom: 6px;
+  padding: 4px 0 10px 11px;
 }
 .timeEntryHeader {
   display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
