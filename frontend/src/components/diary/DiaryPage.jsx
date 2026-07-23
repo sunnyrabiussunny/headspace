@@ -112,9 +112,6 @@ export default function DiaryPage() {
 
         <div className={styles.content}>
 
-          {/* Habit checklist — always at top of each day */}
-          <HabitChecklist date={format(selectedDate, 'yyyy-MM-dd')} />
-
           {/* Week strip row */}
           <div className={styles.weekNav}>
             {/* Today button */}
@@ -179,6 +176,9 @@ export default function DiaryPage() {
           </div>
 
           <div className={styles.divider} />
+
+          {/* Habit checklist — below the date header, just above daily notes */}
+          <HabitChecklist date={format(selectedDate, 'yyyy-MM-dd')} />
 
           {/* Entries + Time entries interleaved by timestamp */}
           <div className={styles.list}>
