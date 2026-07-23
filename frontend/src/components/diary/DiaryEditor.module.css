@@ -1,15 +1,14 @@
 .editor {
-  background: var(--bg-card);
-  border-radius: var(--border-radius);
-  border: 1px solid var(--accent-teal);
+  border-bottom: 1px solid var(--divider);
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   animation: fadeIn .12s ease;
 }
 
 .header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 12px; border-bottom: 1px solid var(--divider);
+  padding: 4px 2px 4px;
 }
 .doneBtn {
   display: flex; align-items: center; gap: 5px; padding: 5px 12px;
@@ -28,9 +27,9 @@
 .body { display: flex; flex-direction: column; position: relative; }
 
 .ta {
-  width: 100%; min-height: 200px;
-  padding: 14px 16px 16px;
-  font-size: 15px; line-height: 1.72; font-family: var(--font);
+  width: 100%; min-height: 90px;
+  padding: 2px 2px 8px;
+  font-size: 14px; line-height: 1.6; font-family: var(--font);
   color: var(--text-primary);
   background: transparent; border: none; outline: none; resize: none;
   display: block;
@@ -111,7 +110,7 @@
 .createConfirm:hover { opacity: .85; }
 
 @media (min-width: 769px) {
-  .ta { min-height: 240px; font-size: 16px; }
+  .ta { min-height: 120px; font-size: 15px; }
 }
 
 /* ── Tag row ── */
