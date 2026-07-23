@@ -174,17 +174,28 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
       return
     }
 
-    const before = newVal.slice(0, cursor)
-    const atIdx  = before.lastIndexOf('@')
-    if (atIdx >= 0) {
-      const frag = before.slice(atIdx + 1)
+    // Mention (@) autocomplete. Once a mention is inserted, its "@Name" text
+    // stays in the textarea permanently — so we must NOT re-scan the whole
+    // string for the last '@' on every keystroke (that would keep re-finding
+    // the already-tagged object and treat everything typed afterward as an
+    // unresolved query for it). Instead: only START a query when '@' is the
+    // character immediately before the cursor, and only CONTINUE an already-
+    // open query while the cursor stays past its anchor.
+    if (query !== null && anchorRef.current >= 0 && cursor > anchorRef.current) {
+      const frag = newVal.slice(anchorRef.current + 1, cursor)
       if (!frag.includes('\n')) {
-        anchorRef.current = atIdx
         setQuery(frag)
         updatePopupPos(ta)
         return
       }
     }
+    if (cursor > 0 && newVal[cursor - 1] === '@') {
+      anchorRef.current = cursor - 1
+      setQuery('')
+      updatePopupPos(ta)
+      return
+    }
+    anchorRef.current = -1
     setQuery(null)
 
     // Tag autocomplete: detect #word
@@ -200,7 +211,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
       }
     }
     setTagQuery(null)
-  }, [save])
+  }, [save, query])
 
   const doInsert = useCallback((obj) => {
     const ta = taRef.current
@@ -325,6 +336,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
         if (selIdx < results.length) doInsert(results[selIdx])
         else if (query.trim()) doCreate(query.trim(), createType)
       } else if (e.key === 'Escape') {
+        anchorRef.current = -1
         setQuery(null)
       }
       return
