@@ -5,6 +5,7 @@ import styles from './GuidePage.module.css'
 const SECTIONS = [
   { id: 'what',      label: 'What is Headspace?' },
   { id: 'diary',     label: 'The Diary' },
+  { id: 'habits',    label: 'Habit Checklist' },
   { id: 'allentries',label: 'All Entries' },
   { id: 'tags',      label: 'Tags' },
   { id: 'objects',   label: 'Objects' },
@@ -13,6 +14,7 @@ const SECTIONS = [
   { id: 'search',    label: 'Search' },
   { id: 'timer',     label: 'Timer' },
   { id: 'extension', label: 'Chrome Extension' },
+  { id: 'board',     label: 'Board' },
   { id: 'export',    label: 'Export and Backup' },
   { id: 'tips',      label: 'Tips and Workflow' },
   { id: 'credits',   label: 'Credits' },
@@ -57,15 +59,18 @@ export default function GuidePage({ embedded = false }) {
 
         <Section id="what" title="What is Headspace?">
           <p>Headspace is a self-hosted personal knowledge management app and diary. All your data lives on your own server or computer — no third-party cloud, no vendor account required.</p>
-          <p>Everything is stored as plain Markdown and JSON files, so you can read, back up, and sync your notes with any tool you like.</p>
-          <Callout icon="💡">Think of Headspace as your calm private studio — a place to write daily notes, tag thoughts, connect ideas, and build a personal knowledge graph over time.</Callout>
+          <p>Everything is stored locally in SQLite, with automatic Markdown and JSON exports for backup — so you can always read, back up, and sync your notes with any tool you like.</p>
+          <Callout icon="💡">Think of Headspace as your calm private studio — a place to write daily notes, track habits and time, tag thoughts, connect ideas, and build a personal knowledge graph over time.</Callout>
           <FeatureGrid features={[
             { icon:'📅', title:'Diary', desc:'Write daily notes anchored to a calendar. Multiple entries per day, all on one page.' },
+            { icon:'✅', title:'Habit Checklist', desc:'A daily habit tracker pinned to the top of every diary day, with streak dots and up to 15 custom habits.' },
             { icon:'📋', title:'All Entries', desc:'See every diary entry ever written in one chronological feed. Filter by tag.' },
             { icon:'🏷️', title:'Tags', desc:'Type #tagname anywhere in a diary entry to tag it. Manage, rename, and delete tags globally.' },
             { icon:'🧩', title:'Objects', desc:'People, places, ideas, organizations, and media — each with their own page, notes, and backlinks.' },
             { icon:'🔗', title:'Linking', desc:'Type @ anywhere to link diary entries to objects. Links are bidirectional — backlinks appear automatically.' },
             { icon:'🔍', title:'Search', desc:'Full-text search across everything — diary entries and all objects.' },
+            { icon:'⏱️', title:'Timer', desc:'Track time by project and task, view weekly reports, and log time from a companion Chrome extension.' },
+            { icon:'🗂️', title:'Board', desc:'A blank, freeform drag-and-resize canvas for your own checklist boxes — no live widgets.' },
             { icon:'💾', title:'Export', desc:'Auto-backup and manual export. Import from Capacities JSON exports too.' },
           ]} />
         </Section>
@@ -81,6 +86,19 @@ export default function GuidePage({ embedded = false }) {
           ]} />
           <Callout icon="📅">
             The green day name at the top of the content area tells you which day you are viewing. The "Today" button in the week strip takes you back instantly.
+          </Callout>
+        </Section>
+
+        <Section id="habits" title="Habit Checklist">
+          <p>Every day in the Diary shows a row of small pill-shaped habit cards, right below the date header and above your entries. It's a lightweight daily checklist that lives alongside your notes.</p>
+          <StepList steps={[
+            { n:1, title:'Check a habit off', desc:'Tap the circle on any habit card to mark it done for the date you are currently viewing. Tap again to undo.' },
+            { n:2, title:'Independent per date', desc:'Each day has its own record. Navigate to yesterday or last week and you\'ll see exactly what was checked that day — nothing is shared across dates.' },
+            { n:3, title:'Read the streak dot', desc:'The small colored dot on each card tells you how recently it was completed: green = today or yesterday, yellow = a few days ago, red = 8+ days or never done.' },
+            { n:4, title:'Manage your habits', desc:'Click "⚙ Manage" to add up to 15 habits, edit a habit\'s title or emoji, or delete one you no longer track.' },
+          ]} />
+          <Callout icon="✅">
+            Habits ship with 9 defaults — Call F&amp;F, Read, Water 2L, and the five daily prayers plus Exercise — but the list is entirely yours to edit once you open Manage.
           </Callout>
         </Section>
 
@@ -175,6 +193,22 @@ We discussed @Headspace and the #product roadmap.`}
           </ul>
           <p>Results show the type (diary entry or object type), a title, and a preview snippet. Clicking a diary result jumps to that date. Clicking an object result opens the object page.</p>
           <Callout icon="🔍">Press <kbd>Esc</kbd> to clear the search and return to the diary view.</Callout>
+        </Section>
+
+        <Section id="board" title="Board">
+          <p>The <strong>Board</strong> tab is a blank, freeform canvas for checklists — inspired by dashboard tools like LobsterBoard, but with no live widgets or real-time data pulled in. You build it entirely yourself.</p>
+          <StepList steps={[
+            { n:1, title:'Turn on editing', desc:'Click "✎ Edit Layout" in the top-right corner. This unlocks adding, moving, resizing, recoloring, and deleting boxes.' },
+            { n:2, title:'Add a box', desc:'With editing on, click "+ Add Box". A new checklist box appears on the canvas that you can drag anywhere.' },
+            { n:3, title:'Move and resize', desc:'Drag a box by its colored header to reposition it. Drag the small diagonal handle in the bottom-right corner to resize it freely.' },
+            { n:4, title:'Rename and recolor', desc:'While editing, click the box title to rename it, or click the small circular dot in the header to pick a new header color.' },
+            { n:5, title:'Add checklist items', desc:'Type in the "Add a note…" field inside any box and press Enter or click Add. This works whether or not Edit Layout is on.' },
+            { n:6, title:'Check off or delete items', desc:'Tap the circle next to any item to mark it done. Hover an item and click the × to remove it.' },
+            { n:7, title:'Finish editing', desc:'Click "✓ Done" to lock the layout back down — items can still be checked and added, but boxes stop moving.' },
+          ]} />
+          <Callout icon="🗂️">
+            Board is intentionally minimal: no weather, no system stats, no live pulls — just freeform checklist boxes you position exactly how you like. Good for a weekly plan, a grocery run, or any list you want visible at a glance.
+          </Callout>
         </Section>
 
         <Section id="export" title="Export and Backup">

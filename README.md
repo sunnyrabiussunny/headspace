@@ -1,6 +1,6 @@
 # Headspace
 
-Self-hosted personal knowledge management and object-based note taking diary. Runs on your own server. All data is yours. Data stored locally as Markdown and JSON files.
+Self-hosted personal knowledge management, diary, time tracker, and habit tracker. Runs on your own server. All data is yours, stored locally in SQLite, with automatic Markdown/JSON exports for backup and portability.
 
 **Port: 5151**
 
@@ -8,12 +8,30 @@ Self-hosted personal knowledge management and object-based note taking diary. Ru
 
 ## Features
 
-- Diary with calendar week strip, write multiple entries per day
-- Object-based note taking system: Person, Place, Idea, Organization
-- `@mention` linking with automatic backlinks
-- Full-text search across diary and objects
+**Diary**
+- Calendar week strip, write multiple entries per day
+- Daily Habit Checklist pinned to the top of each day — add up to 15 habits, tap to mark done, color-coded streak dots (green/yellow/red)
+- `@mention` linking to objects with automatic backlinks
+- `#tag` support on entries
+
+**Objects**
+- Object-based note taking: Person, Place, Idea, Organization, Media, Page
+- Full-text search across diary entries and objects
+
+**Time Tracker**
+- Start/stop timer or log manual time entries, grouped by project and task
+- Daily/weekly/custom-range reports with CSV export
+- Companion Chrome extension to start/stop the timer and log time from any browser tab (see [`chrome-extension/README.md`](chrome-extension/README.md) for install steps)
+
+**Board**
+- Freeform, drag-and-resize checklist canvas (blank slate — add your own boxes, no live widgets)
+- Color-coded box headers, inline rename, per-box checklists
+
+**Data & Backup**
 - Auto-export every 3 days as Markdown and JSON
 - Import/export backup zip
+
+**General**
 - Dark theme, responsive, works on desktop and mobile browser
 - No cloud dependency, no account required
 
