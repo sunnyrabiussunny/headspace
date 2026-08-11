@@ -7,7 +7,8 @@ from datetime import datetime
 import uuid
 
 from database import get_db, engine
-from models.db_models import Base   # same Base as rest of app
+from models.db_models import Base, User   # same Base as rest of app
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/board", tags=["board"])
 
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/api/board", tags=["board"])
 class BoardBox(Base):
     __tablename__ = "board_boxes"
     id         = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id    = Column(String, nullable=True, index=True)
     title      = Column(String, nullable=False, default="Untitled")
     color      = Column(String, nullable=False, default="#3dbfa0")
     x          = Column(Float, default=20)
@@ -28,6 +30,7 @@ class BoardBox(Base):
 class BoardItem(Base):
     __tablename__ = "board_items"
     id         = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id    = Column(String, nullable=True, index=True)
     box_id     = Column(String, nullable=False, index=True)
     text       = Column(String, nullable=False, default="")
     done       = Column(Boolean, default=False)
@@ -68,9 +71,9 @@ class ItemUpdate(BaseModel):
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-async def _box_dict(db: AsyncSession, box: BoardBox):
+async def _box_dict(db: AsyncSession, box: BoardBox, user_id: str):
     r = await db.execute(
-        select(BoardItem).where(BoardItem.box_id == box.id)
+        select(BoardItem).where(BoardItem.box_id == box.id, BoardItem.user_id == user_id)
         .order_by(BoardItem.sort_order, BoardItem.created_at)
     )
     items = r.scalars().all()
@@ -83,31 +86,40 @@ async def _box_dict(db: AsyncSession, box: BoardBox):
         ],
     }
 
+async def _get_owned_box(db: AsyncSession, box_id: str, user_id: str) -> BoardBox:
+    r = await db.execute(select(BoardBox).where(BoardBox.id == box_id, BoardBox.user_id == user_id))
+    box = r.scalar_one_or_none()
+    if not box:
+        raise HTTPException(404, "Box not found")
+    return box
+
 # ── Routes: boxes ────────────────────────────────────────────────────────────
 
 @router.get("/boxes")
-async def list_boxes(db: AsyncSession = Depends(get_db)):
-    r = await db.execute(select(BoardBox).order_by(BoardBox.z_index, BoardBox.created_at))
+async def list_boxes(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    r = await db.execute(
+        select(BoardBox).where(BoardBox.user_id == current_user.id).order_by(BoardBox.z_index, BoardBox.created_at)
+    )
     boxes = r.scalars().all()
-    return [await _box_dict(db, b) for b in boxes]
+    return [await _box_dict(db, b, current_user.id) for b in boxes]
 
 @router.post("/boxes")
-async def create_box(payload: BoxCreate, db: AsyncSession = Depends(get_db)):
-    top_r = await db.execute(select(BoardBox.z_index).order_by(BoardBox.z_index.desc()).limit(1))
+async def create_box(payload: BoxCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    top_r = await db.execute(
+        select(BoardBox.z_index).where(BoardBox.user_id == current_user.id).order_by(BoardBox.z_index.desc()).limit(1)
+    )
     top = top_r.scalar_one_or_none() or 0
     box = BoardBox(
-        id=str(uuid.uuid4()), title=payload.title.strip() or "Untitled",
+        id=str(uuid.uuid4()), user_id=current_user.id, title=payload.title.strip() or "Untitled",
         color=payload.color, x=payload.x, y=payload.y,
         w=payload.w, h=payload.h, z_index=top + 1,
     )
     db.add(box); await db.commit(); await db.refresh(box)
-    return await _box_dict(db, box)
+    return await _box_dict(db, box, current_user.id)
 
 @router.put("/boxes/{box_id}")
-async def update_box(box_id: str, payload: BoxUpdate, db: AsyncSession = Depends(get_db)):
-    r = await db.execute(select(BoardBox).where(BoardBox.id == box_id))
-    box = r.scalar_one_or_none()
-    if not box: raise HTTPException(404, "Box not found")
+async def update_box(box_id: str, payload: BoxUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    box = await _get_owned_box(db, box_id, current_user.id)
     if payload.title   is not None: box.title   = payload.title.strip() or "Untitled"
     if payload.color   is not None: box.color   = payload.color
     if payload.x       is not None: box.x       = payload.x
@@ -116,43 +128,44 @@ async def update_box(box_id: str, payload: BoxUpdate, db: AsyncSession = Depends
     if payload.h       is not None: box.h       = max(120, payload.h)
     if payload.z_index is not None: box.z_index = payload.z_index
     await db.commit(); await db.refresh(box)
-    return await _box_dict(db, box)
+    return await _box_dict(db, box, current_user.id)
 
 @router.post("/boxes/{box_id}/front")
-async def bring_to_front(box_id: str, db: AsyncSession = Depends(get_db)):
-    r = await db.execute(select(BoardBox).where(BoardBox.id == box_id))
-    box = r.scalar_one_or_none()
-    if not box: raise HTTPException(404, "Box not found")
-    top_r = await db.execute(select(BoardBox.z_index).order_by(BoardBox.z_index.desc()).limit(1))
+async def bring_to_front(box_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    box = await _get_owned_box(db, box_id, current_user.id)
+    top_r = await db.execute(
+        select(BoardBox.z_index).where(BoardBox.user_id == current_user.id).order_by(BoardBox.z_index.desc()).limit(1)
+    )
     top = top_r.scalar_one_or_none() or 0
     box.z_index = top + 1
     await db.commit(); await db.refresh(box)
-    return await _box_dict(db, box)
+    return await _box_dict(db, box, current_user.id)
 
 @router.delete("/boxes/{box_id}", status_code=204)
-async def delete_box(box_id: str, db: AsyncSession = Depends(get_db)):
-    await db.execute(delete(BoardItem).where(BoardItem.box_id == box_id))
-    await db.execute(delete(BoardBox).where(BoardBox.id == box_id))
+async def delete_box(box_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _get_owned_box(db, box_id, current_user.id)  # 404 if not owned
+    await db.execute(delete(BoardItem).where(BoardItem.box_id == box_id, BoardItem.user_id == current_user.id))
+    await db.execute(delete(BoardBox).where(BoardBox.id == box_id, BoardBox.user_id == current_user.id))
     await db.commit()
 
 # ── Routes: items ────────────────────────────────────────────────────────────
 
 @router.post("/boxes/{box_id}/items")
-async def create_item(box_id: str, payload: ItemCreate, db: AsyncSession = Depends(get_db)):
-    r = await db.execute(select(BoardBox).where(BoardBox.id == box_id))
-    if not r.scalar_one_or_none(): raise HTTPException(404, "Box not found")
-    count_r = await db.execute(select(BoardItem).where(BoardItem.box_id == box_id))
+async def create_item(box_id: str, payload: ItemCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _get_owned_box(db, box_id, current_user.id)  # 404 if not owned
+    count_r = await db.execute(select(BoardItem).where(BoardItem.box_id == box_id, BoardItem.user_id == current_user.id))
     order = len(count_r.scalars().all())
-    item = BoardItem(id=str(uuid.uuid4()), box_id=box_id,
-                      text=payload.text.strip(), sort_order=order)
-    if not item.text:
+    text_val = payload.text.strip()
+    if not text_val:
         raise HTTPException(400, "text required")
+    item = BoardItem(id=str(uuid.uuid4()), user_id=current_user.id, box_id=box_id,
+                      text=text_val, sort_order=order)
     db.add(item); await db.commit(); await db.refresh(item)
     return {"id": item.id, "text": item.text, "done": item.done, "sort_order": item.sort_order}
 
 @router.put("/items/{item_id}")
-async def update_item(item_id: str, payload: ItemUpdate, db: AsyncSession = Depends(get_db)):
-    r = await db.execute(select(BoardItem).where(BoardItem.id == item_id))
+async def update_item(item_id: str, payload: ItemUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    r = await db.execute(select(BoardItem).where(BoardItem.id == item_id, BoardItem.user_id == current_user.id))
     item = r.scalar_one_or_none()
     if not item: raise HTTPException(404, "Item not found")
     if payload.text is not None: item.text = payload.text.strip()
@@ -161,6 +174,6 @@ async def update_item(item_id: str, payload: ItemUpdate, db: AsyncSession = Depe
     return {"id": item.id, "text": item.text, "done": item.done, "sort_order": item.sort_order}
 
 @router.delete("/items/{item_id}", status_code=204)
-async def delete_item(item_id: str, db: AsyncSession = Depends(get_db)):
-    await db.execute(delete(BoardItem).where(BoardItem.id == item_id))
+async def delete_item(item_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await db.execute(delete(BoardItem).where(BoardItem.id == item_id, BoardItem.user_id == current_user.id))
     await db.commit()

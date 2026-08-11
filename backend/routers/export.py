@@ -3,7 +3,7 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Header
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
@@ -11,62 +11,74 @@ import zipfile
 import io
 import uuid
 
-from database import get_db
-from models.db_models import DiaryEntry, KnowledgeObject, Mention
+from database import get_db, AsyncSessionLocal
+from models.db_models import DiaryEntry, KnowledgeObject, Mention, User
 from models.schemas import DiaryEntryOut, ObjectOut
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 BACKUP_DIR = os.getenv("BACKUP_DIR", "/app/data/backups")
+CRON_SECRET = os.getenv("CRON_SECRET", "")
 
 
-def _get_backup_meta_path():
-    return Path(BACKUP_DIR) / "backup_meta.json"
+def _user_backup_dir(username: str) -> Path:
+    safe = re.sub(r'[^\w\-]', '_', username)
+    return Path(BACKUP_DIR) / safe
 
 
-def _load_meta() -> dict:
-    p = _get_backup_meta_path()
+def _get_backup_meta_path(username: str):
+    return _user_backup_dir(username) / "backup_meta.json"
+
+
+def _load_meta(username: str) -> dict:
+    p = _get_backup_meta_path(username)
     if p.exists():
         with open(p) as f:
             return json.load(f)
     return {"last_backup": "", "entries_count": 0, "objects_count": 0}
 
 
-def _save_meta(meta: dict):
-    Path(BACKUP_DIR).mkdir(parents=True, exist_ok=True)
-    with open(_get_backup_meta_path(), "w") as f:
+def _save_meta(username: str, meta: dict):
+    _user_backup_dir(username).mkdir(parents=True, exist_ok=True)
+    with open(_get_backup_meta_path(username), "w") as f:
         json.dump(meta, f, indent=2)
 
 
 @router.get("/status")
-async def export_status():
-    meta = _load_meta()
+async def export_status(current_user: User = Depends(get_current_user)):
+    meta = _load_meta(current_user.username)
     return {
         "last_backup": meta.get("last_backup", "Never"),
         "entries_count": meta.get("entries_count", 0),
         "objects_count": meta.get("objects_count", 0),
-        "backup_dir": BACKUP_DIR,
+        "backup_dir": str(_user_backup_dir(current_user.username)),
     }
 
 
-@router.post("/backup")
-async def run_backup(db: AsyncSession = Depends(get_db)):
-    """Export all data to BACKUP_DIR as Markdown plus JSON files."""
-    Path(BACKUP_DIR).mkdir(parents=True, exist_ok=True)
-
-    # Wipe previous backup
+async def _run_backup_for_user(db: AsyncSession, user: User) -> dict:
+    """Export one user's data (diary, objects, board, habits, time) to their
+    own backup subfolder as Markdown plus JSON files. Shared by the
+    interactive /backup endpoint and the cron-driven /backup-all endpoint
+    that a cloud-sync script (rclone etc.) can call for everyone at once."""
     import shutil
-    diary_dir = Path(BACKUP_DIR) / "diary"
-    obj_dir = Path(BACKUP_DIR) / "objects"
-    if diary_dir.exists():
-        shutil.rmtree(diary_dir)
-    if obj_dir.exists():
-        shutil.rmtree(obj_dir)
-    diary_dir.mkdir()
-    obj_dir.mkdir()
+    from routers.board import BoardBox, BoardItem
+    from routers.habits import Habit, HabitCompletion
+    from routers.time import TimeProject, TimeTask, TimeEntry
 
-    # Diary entries
-    entries_result = await db.execute(select(DiaryEntry).order_by(DiaryEntry.date))
+    user_dir = _user_backup_dir(user.username)
+    user_dir.mkdir(parents=True, exist_ok=True)
+
+    diary_dir = user_dir / "diary"
+    obj_dir   = user_dir / "objects"
+    board_dir = user_dir / "board"
+    for d in (diary_dir, obj_dir, board_dir):
+        if d.exists():
+            shutil.rmtree(d)
+        d.mkdir()
+
+    # ── Diary entries ────────────────────────────────────────────────────
+    entries_result = await db.execute(select(DiaryEntry).where(DiaryEntry.user_id == user.id).order_by(DiaryEntry.date))
     entries = entries_result.scalars().all()
     for entry in entries:
         md = f"# {entry.date}\n\n{entry.content}\n"
@@ -75,9 +87,7 @@ async def run_backup(db: AsyncSession = Depends(get_db)):
         (diary_dir / f"{entry.date}.md").write_text(md, encoding="utf-8")
         (diary_dir / f"{entry.id}.json").write_text(
             json.dumps({
-                "id": entry.id,
-                "date": entry.date,
-                "content": entry.content,
+                "id": entry.id, "date": entry.date, "content": entry.content,
                 "tags": entry.tags or [],
                 "created_at": entry.created_at.isoformat() if entry.created_at else "",
                 "updated_at": entry.updated_at.isoformat() if entry.updated_at else "",
@@ -85,8 +95,8 @@ async def run_backup(db: AsyncSession = Depends(get_db)):
             encoding="utf-8"
         )
 
-    # Objects
-    objs_result = await db.execute(select(KnowledgeObject).order_by(KnowledgeObject.title))
+    # ── Objects ──────────────────────────────────────────────────────────
+    objs_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.user_id == user.id).order_by(KnowledgeObject.title))
     objs = objs_result.scalars().all()
     for obj in objs:
         safe = re.sub(r'[^\w\- ]', '_', obj.title)[:40]
@@ -100,36 +110,109 @@ async def run_backup(db: AsyncSession = Depends(get_db)):
         (obj_dir / f"{obj.type.lower()}_{safe}.md").write_text(md, encoding="utf-8")
         (obj_dir / f"{obj.id}.json").write_text(
             json.dumps({
-                "id": obj.id,
-                "type": obj.type,
-                "title": obj.title,
-                "description": obj.description,
-                "notes": obj.notes,
-                "tags": obj.tags or [],
-                "properties": obj.properties or {},
+                "id": obj.id, "type": obj.type, "title": obj.title,
+                "description": obj.description, "notes": obj.notes,
+                "tags": obj.tags or [], "properties": obj.properties or {},
                 "created_at": obj.created_at.isoformat() if obj.created_at else "",
                 "updated_at": obj.updated_at.isoformat() if obj.updated_at else "",
             }, ensure_ascii=False, indent=2),
             encoding="utf-8"
         )
 
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-    meta = {"last_backup": timestamp, "entries_count": len(entries), "objects_count": len(objs)}
-    _save_meta(meta)
+    # ── Board (boxes + checklist items) ─────────────────────────────────
+    boxes_result = await db.execute(select(BoardBox).where(BoardBox.user_id == user.id).order_by(BoardBox.z_index))
+    boxes = boxes_result.scalars().all()
+    board_export = []
+    board_md_lines = ["# Board\n"]
+    for box in boxes:
+        items_result = await db.execute(select(BoardItem).where(BoardItem.box_id == box.id, BoardItem.user_id == user.id).order_by(BoardItem.sort_order))
+        items = items_result.scalars().all()
+        board_export.append({
+            "id": box.id, "title": box.title, "color": box.color,
+            "x": box.x, "y": box.y, "w": box.w, "h": box.h, "z_index": box.z_index,
+            "items": [{"id": i.id, "text": i.text, "done": i.done} for i in items],
+        })
+        board_md_lines.append(f"\n## {box.title}\n")
+        for i in items:
+            board_md_lines.append(f"- [{'x' if i.done else ' '}] {i.text}")
+    (board_dir / "board.json").write_text(json.dumps(board_export, ensure_ascii=False, indent=2), encoding="utf-8")
+    (board_dir / "board.md").write_text("\n".join(board_md_lines) + "\n", encoding="utf-8")
 
-    return {"status": "ok", "timestamp": timestamp, "entries": len(entries), "objects": len(objs)}
+    # ── Habits ───────────────────────────────────────────────────────────
+    habits_result = await db.execute(select(Habit).where(Habit.user_id == user.id).order_by(Habit.sort_order))
+    habits = habits_result.scalars().all()
+    completions_result = await db.execute(select(HabitCompletion).where(HabitCompletion.user_id == user.id))
+    completions = completions_result.scalars().all()
+    habits_export = {
+        "habits": [{"id": h.id, "title": h.title, "icon": h.icon} for h in habits],
+        "completions": [{"habit_id": c.habit_id, "date": c.date} for c in completions],
+    }
+    (user_dir / "habits.json").write_text(json.dumps(habits_export, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # ── Time tracker ─────────────────────────────────────────────────────
+    projects_result = await db.execute(select(TimeProject).where(TimeProject.user_id == user.id))
+    projects = projects_result.scalars().all()
+    tasks_result = await db.execute(select(TimeTask).where(TimeTask.user_id == user.id))
+    tasks = tasks_result.scalars().all()
+    time_entries_result = await db.execute(select(TimeEntry).where(TimeEntry.user_id == user.id))
+    time_entries = time_entries_result.scalars().all()
+    time_export = {
+        "projects": [{"id": p.id, "name": p.name, "color": p.color, "client": p.client} for p in projects],
+        "tasks": [{"id": t.id, "project_id": t.project_id, "name": t.name} for t in tasks],
+        "entries": [{
+            "id": e.id, "project_id": e.project_id, "task_id": e.task_id,
+            "description": e.description, "tags": e.tags,
+            "start_time": e.start_time.isoformat() if e.start_time else "",
+            "end_time": e.end_time.isoformat() if e.end_time else "",
+            "duration": e.duration,
+        } for e in time_entries],
+    }
+    (user_dir / "time.json").write_text(json.dumps(time_export, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+    meta = {
+        "last_backup": timestamp, "entries_count": len(entries), "objects_count": len(objs),
+        "board_boxes_count": len(boxes), "habits_count": len(habits), "time_entries_count": len(time_entries),
+    }
+    _save_meta(user.username, meta)
+    return {"status": "ok", "timestamp": timestamp, "entries": len(entries), "objects": len(objs), "board_boxes": len(boxes)}
+
+
+@router.post("/backup")
+async def run_backup(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Export the current user's data to BACKUP_DIR as Markdown plus JSON files."""
+    return await _run_backup_for_user(db, current_user)
+
+
+@router.post("/backup-all")
+async def run_backup_all(x_cron_secret: str = Header(default="")):
+    """
+    Back up EVERY user's data in one pass. Intended to be called by an
+    external cron job / systemd timer (see scripts/backup-to-cloud.sh),
+    not from the app UI — protected by a shared secret (CRON_SECRET env
+    var) instead of a per-user login token.
+    """
+    if not CRON_SECRET or x_cron_secret != CRON_SECRET:
+        raise HTTPException(401, "Invalid or missing cron secret")
+    results = []
+    async with AsyncSessionLocal() as db:
+        users_result = await db.execute(select(User))
+        for user in users_result.scalars().all():
+            results.append({"username": user.username, **(await _run_backup_for_user(db, user))})
+    return {"status": "ok", "users_backed_up": len(results), "results": results}
 
 
 @router.get("/download")
-async def download_backup(db: AsyncSession = Depends(get_db)):
-    """Download the entire backup as a zip file."""
-    await run_backup(db)
+async def download_backup(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Download the current user's entire backup as a zip file."""
+    await _run_backup_for_user(db, current_user)
+    user_dir = _user_backup_dir(current_user.username)
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in Path(BACKUP_DIR).rglob("*"):
+        for f in user_dir.rglob("*"):
             if f.is_file() and f.name != "backup_meta.json":
-                zf.write(f, f.relative_to(BACKUP_DIR))
+                zf.write(f, f.relative_to(user_dir))
     buf.seek(0)
 
     from fastapi.responses import StreamingResponse
@@ -142,8 +225,8 @@ async def download_backup(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/import")
-async def import_backup(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
-    """Import diary entries and objects from uploaded JSON files or a zip."""
+async def import_backup(file: UploadFile = File(...), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Import diary entries and objects from uploaded JSON files or a zip, into the current user's account."""
     content = await file.read()
     entries_count = 0
     objects_count = 0
@@ -156,29 +239,28 @@ async def import_backup(file: UploadFile = File(...), db: AsyncSession = Depends
                     continue
                 data = json.loads(zf.read(name))
                 if "diary" in name:
-                    await _upsert_entry(db, data)
+                    await _upsert_entry(db, data, current_user.id)
                     entries_count += 1
                 elif "objects" in name or "object" in name:
-                    await _upsert_object(db, data)
+                    await _upsert_object(db, data, current_user.id)
                     objects_count += 1
     else:
         data = json.loads(content)
         if isinstance(data, list):
             for item in data:
                 if "date" in item and "content" in item:
-                    await _upsert_entry(db, item)
+                    await _upsert_entry(db, item, current_user.id)
                     entries_count += 1
                 elif "type" in item and "title" in item:
-                    await _upsert_object(db, item)
+                    await _upsert_object(db, item, current_user.id)
                     objects_count += 1
 
     await db.commit()
     return {"status": "ok", "entries_imported": entries_count, "objects_imported": objects_count}
 
 
-async def _upsert_entry(db: AsyncSession, data: dict):
-    from sqlalchemy import select, delete
-    result = await db.execute(select(DiaryEntry).where(DiaryEntry.id == data.get("id", "")))
+async def _upsert_entry(db: AsyncSession, data: dict, user_id: str):
+    result = await db.execute(select(DiaryEntry).where(DiaryEntry.id == data.get("id", ""), DiaryEntry.user_id == user_id))
     existing = result.scalar_one_or_none()
     if existing:
         existing.content = data.get("content", existing.content)
@@ -186,15 +268,15 @@ async def _upsert_entry(db: AsyncSession, data: dict):
     else:
         db.add(DiaryEntry(
             id=data.get("id", str(uuid.uuid4())),
+            user_id=user_id,
             date=data.get("date", ""),
             content=data.get("content", ""),
             tags=data.get("tags", []),
         ))
 
 
-async def _upsert_object(db: AsyncSession, data: dict):
-    from sqlalchemy import select, delete
-    result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == data.get("id", "")))
+async def _upsert_object(db: AsyncSession, data: dict, user_id: str):
+    result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == data.get("id", ""), KnowledgeObject.user_id == user_id))
     existing = result.scalar_one_or_none()
     if existing:
         existing.title = data.get("title", existing.title)
@@ -204,6 +286,7 @@ async def _upsert_object(db: AsyncSession, data: dict):
     else:
         db.add(KnowledgeObject(
             id=data.get("id", str(uuid.uuid4())),
+            user_id=user_id,
             type=data.get("type", "IDEA"),
             title=data.get("title", "Untitled"),
             description=data.get("description", ""),
@@ -216,9 +299,9 @@ async def _upsert_object(db: AsyncSession, data: dict):
 # ── Capacities Import ─────────────────────────────────────────────────────────
 
 @router.post("/import-capacities")
-async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def import_capacities(file: UploadFile = File(...), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
-    Import from a Capacities Markdown export.
+    Import from a Capacities Markdown export, into the current user's account.
 
     Handles two Capacities export formats:
 
@@ -239,6 +322,7 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
 
     raw = await file.read()
     fname = (file.filename or "").lower()
+    user_id = current_user.id
 
     entries_count = 0
     objects_count = 0
@@ -246,8 +330,8 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
     # Cache: title (lower) → object id, to avoid creating duplicates within one import
     obj_cache: dict[str, str] = {}
 
-    # Pre-load existing objects into cache
-    existing_objs = await db.execute(select(KnowledgeObject))
+    # Pre-load existing objects (this user's only) into cache
+    existing_objs = await db.execute(select(KnowledgeObject).where(KnowledgeObject.user_id == user_id))
     for o in existing_objs.scalars().all():
         obj_cache[o.title.lower().strip()] = o.id
 
@@ -256,9 +340,8 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         nonlocal objects_count
         key = title.lower().strip()
         if key in obj_cache:
-            # Update URL if we now have one and it wasn't set before
             if properties and properties.get('url'):
-                existing = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == obj_cache[key]))
+                existing = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == obj_cache[key], KnowledgeObject.user_id == user_id))
                 ex = existing.scalar_one_or_none()
                 if ex and not ex.properties.get('url'):
                     ex.properties = {**ex.properties, **properties}
@@ -266,6 +349,7 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         oid = str(uuid.uuid4())
         db.add(KnowledgeObject(
             id=oid,
+            user_id=user_id,
             type=obj_type,
             title=title.strip(),
             description=description or "",
@@ -280,9 +364,7 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         return oid
 
     def _path_to_type(rel_path: str) -> str:
-        """Infer object type from a relative path like ../People/Name.md"""
         parts = rel_path.replace('\\', '/').split('/')
-        # Find the folder component (skip ..)
         for part in parts:
             if part in ('..', '.', ''):
                 continue
@@ -336,7 +418,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
             'jan':'01','feb':'02','mar':'03','apr':'04','jun':'06',
             'jul':'07','aug':'08','sep':'09','oct':'10','nov':'11','dec':'12',
         }
-        # e.g. "June 15, 2026, 12:38" or "June 15, 2026"
         m = _re.match(
             r'(\w+)\s+(\d{1,2}),?\s+(\d{4})(?:,\s*(\d{1,2}):(\d{2}))?',
             s.strip(), _re.IGNORECASE
@@ -366,41 +447,23 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         return meta, body.strip()
 
     def _tags_from_text(text: str) -> list:
-        """
-        Extract inline #hashtags from text.
-        Excludes markdown headings (# at start of line) and
-        junk tags from heading anchors (containing -- or starting with -).
-        """
         tags = []
         for line in text.splitlines():
             stripped = line.strip()
-            # Skip markdown heading lines entirely
             if stripped.startswith('#'):
                 continue
-            # Find inline hashtags: #word not at line start
             for m in _re.finditer(r'(?<![#\w])#([a-zA-Z][a-zA-Z0-9_]{0,39})', line):
                 tag = m.group(1).lower()
-                # Skip tags that look like heading anchors (contain --)
                 if '--' in tag or tag.startswith('-'):
                     continue
                 tags.append(tag)
         return list(set(tags))
 
     async def _convert_links(text: str, folder_context: str = '') -> str:
-        """
-        Convert Capacities link formats to Headspace @[Title](id) format.
-
-        [[Name]]                            → @[Name](id)
-        [Title](../Type/File.md)            → @[Title](id)
-        [Title](../Weblinks/File.md)        → @[Title](id)  MEDIA object with URL in properties
-        [Title](../Type/File%20Name.md)     → @[Title](id)  (URL-decoded)
-        [Title](https://example.com)        → @[Title](id)  MEDIA object with URL stored
-        """
         from urllib.parse import unquote as _unquote
 
         result = text
 
-        # 0. Real URL links: [Title](https://...) or [Title](http://...)
         url_link_re = _re.compile(r'\[([^\]]+)\]\((https?://[^)]+)\)')
         url_matches = list(url_link_re.finditer(result))
         offset = 0
@@ -408,7 +471,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
             title = m.group(1).strip()
             url   = m.group(2).strip()
             if not title or title.lower() in ('untitled', 'untitled - notes', ''):
-                # Try to use domain as title
                 domain_m = _re.search(r'https?://(?:www\.)?([^/]+)', url)
                 title = domain_m.group(1) if domain_m else url[:40]
             oid = await _get_or_create_object(title, 'MEDIA', properties={'url': url})
@@ -418,7 +480,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
             result = result[:start] + replacement + result[end:]
             offset += len(replacement) - (m.end() - m.start())
 
-        # 1. Markdown links: [Title](../Folder/File.md)
         md_link_re = _re.compile(r'\[([^\]]+)\]\(([^)]+\.md[^)]*)\)')
         async def _replace_md_link(m):
             title = m.group(1).strip()
@@ -426,9 +487,7 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
             obj_type = _path_to_type(path)
             if obj_type == 'DIARY':
                 obj_type = 'IDEA'
-            # For weblinks, the title might be "Untitled" — try to clean it up
             if obj_type == 'MEDIA' and title.lower() in ('untitled', 'untitled - notes', ''):
-                # Use filename without extension as title
                 fname_part = path.split('/')[-1].replace('.md', '')
                 fname_part = _unquote(fname_part).strip()
                 if fname_part and fname_part.lower() != 'untitled':
@@ -436,7 +495,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
             oid = await _get_or_create_object(title, obj_type)
             return f'@[{title}]({oid})'
 
-        # Process MD links
         md_matches = list(md_link_re.finditer(result))
         offset = 0
         for m in md_matches:
@@ -446,13 +504,11 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
             result = result[:start] + replacement + result[end:]
             offset += len(replacement) - (m.end() - m.start())
 
-        # 2. Wiki links: [[Name]] — default to PERSON if unknown
         wiki_re = _re.compile(r'\[\[([^\]]+)\]\]')
         wiki_matches = list(wiki_re.finditer(result))
         offset = 0
         for m in wiki_matches:
             name = m.group(1).strip()
-            # Heuristic: if name looks like a full person name (has space, title case), use PERSON
             words = name.split()
             if len(words) >= 2 and all(w[0].isupper() for w in words if w):
                 obj_type = 'PERSON'
@@ -467,7 +523,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
 
         return result
 
-    # Timestamp pattern: "June 15, 2026, 12:38" at start of line
     TIMESTAMP_RE = _re.compile(
         r'^((?:January|February|March|April|May|June|July|August|September|October|November|December|'
         r'Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}(?:,\s*\d{1,2}:\d{2})?)\s+',
@@ -481,7 +536,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         date_from_meta = meta.get('date', '')[:10] or meta.get('day', '')[:10]
         folder_type = _folder_to_type(folder)
 
-        # ── Format B: file contains multiple timestamped entries ────────────
         ts_matches = list(TIMESTAMP_RE.finditer(body))
         if ts_matches:
             for i, m in enumerate(ts_matches):
@@ -504,6 +558,7 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
                 ts = datetime(int(date_str[:4]), int(date_str[5:7]), int(date_str[8:10]), hour, minute)
                 db.add(DiaryEntry(
                     id=eid,
+                    user_id=user_id,
                     date=date_str,
                     content=converted,
                     tags=list(set(tags)),
@@ -513,7 +568,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
                 entries_count += 1
             return
 
-        # ── Format A / standard: single entry per file ──────────────────────
         date_str = date_from_file or date_from_meta
 
         if date_str and len(date_str) == 10:
@@ -522,6 +576,7 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
             eid = str(uuid.uuid4())
             db.add(DiaryEntry(
                 id=eid,
+                user_id=user_id,
                 date=date_str,
                 content=converted,
                 tags=list(set(tags)),
@@ -533,26 +588,22 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         elif folder_type not in ('DIARY',):
             title = meta.get('title') or meta.get('name') or filename.replace('.md', '').strip()
             description = meta.get('description', '')
-            # Extract URL from YAML front matter (Capacities Weblinks export)
             url = meta.get('url') or meta.get('link') or meta.get('href') or ''
-            # Also scan body for a bare URL if this is a weblinks folder
             if not url and folder_type == 'MEDIA':
                 url_m = _re.search(r'https?://\S+', body)
                 if url_m:
                     url = url_m.group(0).rstrip(')')
             properties = {'url': url} if url else {}
-            # Clean up "Untitled" titles for weblinks — use URL domain instead
             if title.lower() in ('untitled', 'untitled - notes', '') and url:
                 domain_m = _re.search(r'https?://(?:www\.)?([^/]+)', url)
                 title = domain_m.group(1) if domain_m else title
             converted = await _convert_links(body, folder)
             tags = _tags_from_text(body)
             await _get_or_create_object(title, folder_type, properties=properties, description=description)
-            # Update notes on the newly created object
             key = title.lower().strip()
             oid = obj_cache.get(key)
             if oid:
-                existing = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == oid))
+                existing = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == oid, KnowledgeObject.user_id == user_id))
                 ex = existing.scalar_one_or_none()
                 if ex:
                     ex.notes = converted
@@ -585,9 +636,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
                             obj_type = 'IDEA'
                         for row in reader:
                             title = row.get('Title') or row.get('Name') or row.get('title') or ''
-                            notes = row.get('Notes') or row.get('Content') or row.get('notes') or ''
-                            desc  = row.get('Description') or row.get('description') or ''
-                            tags  = [t.strip() for t in (row.get('Tags') or '').split(',') if t.strip()]
                             if title:
                                 await _get_or_create_object(title, obj_type)
         except zipfile.BadZipFile:
@@ -602,7 +650,6 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
         reader = csv_mod.DictReader(_io.StringIO(text))
         for row in reader:
             title = row.get('Title') or row.get('Name') or row.get('title') or ''
-            notes = row.get('Notes') or row.get('Content') or row.get('notes') or ''
             if title:
                 await _get_or_create_object(title, 'IDEA')
 
@@ -617,10 +664,8 @@ async def import_capacities(file: UploadFile = File(...), db: AsyncSession = Dep
     }
 
 
-
-
 @router.delete("/cleanup-junk-tags")
-async def cleanup_junk_tags(db: AsyncSession = Depends(get_db)):
+async def cleanup_junk_tags(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
     Remove junk tags that were created from Capacities markdown heading anchors.
     These look like: #-artemis---llm, #-background, #-career-snapshot etc.
@@ -629,7 +674,7 @@ async def cleanup_junk_tags(db: AsyncSession = Depends(get_db)):
     import re as _re
     JUNK = _re.compile(r'^-|--|[^a-zA-Z0-9_\-]|^.{41,}')
 
-    diary_result = await db.execute(select(DiaryEntry))
+    diary_result = await db.execute(select(DiaryEntry).where(DiaryEntry.user_id == current_user.id))
     cleaned_entries = 0
     for entry in diary_result.scalars().all():
         if not entry.tags:
@@ -639,7 +684,7 @@ async def cleanup_junk_tags(db: AsyncSession = Depends(get_db)):
             entry.tags = clean
             cleaned_entries += 1
 
-    obj_result = await db.execute(select(KnowledgeObject))
+    obj_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.user_id == current_user.id))
     cleaned_objects = 0
     for obj in obj_result.scalars().all():
         if not obj.tags:
@@ -658,23 +703,30 @@ async def cleanup_junk_tags(db: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/delete-all")
-async def delete_all_data(confirm: str, db: AsyncSession = Depends(get_db)):
+async def delete_all_data(confirm: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """
-    Nuclear option — delete ALL diary entries, objects, mentions and time data.
-    Requires ?confirm=DELETEALL in query string.
+    Nuclear option — delete ALL of the current user's diary entries, objects,
+    mentions, board, habits and time data. Requires ?confirm=DELETEALL in the
+    query string. Only affects the logged-in account — never other users.
     """
     if confirm != "DELETEALL":
         raise HTTPException(400, "Confirmation string must be exactly: DELETEALL")
 
-    from models.db_models import DiaryEntry, KnowledgeObject, Mention, Mention
     from routers.time import TimeEntry, TimeProject, TimeTask
+    from routers.board import BoardBox, BoardItem
+    from routers.habits import Habit, HabitCompletion
 
-    await db.execute(delete(Mention))
-    await db.execute(delete(DiaryEntry))
-    await db.execute(delete(KnowledgeObject))
-    await db.execute(delete(TimeEntry))
-    await db.execute(delete(TimeProject))
-    await db.execute(delete(TimeTask))
+    uid = current_user.id
+    await db.execute(delete(Mention).where(Mention.user_id == uid))
+    await db.execute(delete(DiaryEntry).where(DiaryEntry.user_id == uid))
+    await db.execute(delete(KnowledgeObject).where(KnowledgeObject.user_id == uid))
+    await db.execute(delete(TimeEntry).where(TimeEntry.user_id == uid))
+    await db.execute(delete(TimeProject).where(TimeProject.user_id == uid))
+    await db.execute(delete(TimeTask).where(TimeTask.user_id == uid))
+    await db.execute(delete(BoardItem).where(BoardItem.user_id == uid))
+    await db.execute(delete(BoardBox).where(BoardBox.user_id == uid))
+    await db.execute(delete(HabitCompletion).where(HabitCompletion.user_id == uid))
+    await db.execute(delete(Habit).where(Habit.user_id == uid))
     await db.commit()
 
-    return {"status": "ok", "message": "All data deleted"}
+    return {"status": "ok", "message": "All of your data has been deleted"}

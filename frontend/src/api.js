@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { attachAuth } from './auth'
 
-const api = axios.create({ baseURL: '/api' })
+const api = attachAuth(axios.create({ baseURL: '/api' }))
 
 // ── Diary ──────────────────────────────────────────────────────────────────
 
@@ -38,7 +39,17 @@ export const globalSearch        = (q) => api.get(`/search/${encodeURIComponent(
 
 export const getExportStatus     = () => api.get('/export/status').then(r => r.data)
 export const runBackup           = () => api.post('/export/backup').then(r => r.data)
-export const downloadBackup      = () => { window.location.href = '/api/export/download' }
+export const downloadBackup      = async () => {
+  const res = await api.get('/export/download', { responseType: 'blob' })
+  const disposition = res.headers['content-disposition'] || ''
+  const match = disposition.match(/filename=([^;]+)/)
+  const filename = match ? match[1].trim() : 'headspace_backup.zip'
+  const url = window.URL.createObjectURL(new Blob([res.data]))
+  const a = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); a.remove()
+  window.URL.revokeObjectURL(url)
+}
 export const importBackup        = (file) => {
   const form = new FormData()
   form.append('file', file)
@@ -49,6 +60,7 @@ export const importCapacities    = (file) => {
   form.append('file', file)
   return api.post('/export/import-capacities', form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data)
 }
+export const deleteAllData       = () => api.delete('/export/delete-all', { params: { confirm: 'DELETEALL' } }).then(r => r.data)
 export const getEntryContext     = (entryId, objectId) =>
   api.get(`/diary/entry/${entryId}/context`, { params: { object_id: objectId } }).then(r => r.data)
 export const searchTags          = (q) => api.get('/tags/search', { params: { q } }).then(r => r.data)

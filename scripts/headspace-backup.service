@@ -1,0 +1,12 @@
+[Unit]
+Description=Headspace cloud backup (rclone sync to Google Drive / Box)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Edit these two paths/values for your setup, or put them in an EnvironmentFile instead.
+Environment=CRON_SECRET=changeme-match-docker-compose
+Environment=RCLONE_REMOTE=gdrive:HeadspaceBackups
+Environment=HEADSPACE_URL=http://localhost:5151
+ExecStart=/bin/bash /home/%i/headspace/scripts/backup-to-cloud.sh

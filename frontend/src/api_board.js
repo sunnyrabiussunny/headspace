@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { attachAuth } from './auth'
 
-const api = axios.create({ baseURL: '/api' })
+const api = attachAuth(axios.create({ baseURL: '/api' }))
 
 export const listBoxes      = () => api.get('/board/boxes').then(r => r.data)
 export const createBox      = (data) => api.post('/board/boxes', data).then(r => r.data)

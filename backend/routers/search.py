@@ -4,15 +4,16 @@ from sqlalchemy import select, or_
 from typing import List
 
 from database import get_db
-from models.db_models import DiaryEntry, KnowledgeObject
+from models.db_models import DiaryEntry, KnowledgeObject, User
 from models.schemas import SearchResult
 from utils.mentions import strip_mentions
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 
 @router.get("/{query}", response_model=List[SearchResult])
-async def global_search(query: str, db: AsyncSession = Depends(get_db)):
+async def global_search(query: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     results: List[SearchResult] = []
     clean_query = query.lstrip('#')   # support #tagname searches
 
@@ -20,7 +21,7 @@ async def global_search(query: str, db: AsyncSession = Depends(get_db)):
     if query.startswith('#'):
         tag = clean_query.lower().strip()
 
-        diary_res = await db.execute(select(DiaryEntry).order_by(DiaryEntry.date.desc()))
+        diary_res = await db.execute(select(DiaryEntry).where(DiaryEntry.user_id == current_user.id).order_by(DiaryEntry.date.desc()))
         for entry in diary_res.scalars().all():
             if tag in [t.lower() for t in (entry.tags or [])]:
                 results.append(SearchResult(
@@ -31,7 +32,7 @@ async def global_search(query: str, db: AsyncSession = Depends(get_db)):
                     date=entry.date,
                 ))
 
-        obj_res = await db.execute(select(KnowledgeObject).order_by(KnowledgeObject.updated_at.desc()))
+        obj_res = await db.execute(select(KnowledgeObject).where(KnowledgeObject.user_id == current_user.id).order_by(KnowledgeObject.updated_at.desc()))
         for obj in obj_res.scalars().all():
             if tag in [t.lower() for t in (obj.tags or [])]:
                 results.append(SearchResult(
@@ -46,7 +47,7 @@ async def global_search(query: str, db: AsyncSession = Depends(get_db)):
     # Regular full-text search
     diary_res = await db.execute(
         select(DiaryEntry)
-        .where(DiaryEntry.content.contains(clean_query))
+        .where(DiaryEntry.content.contains(clean_query), DiaryEntry.user_id == current_user.id)
         .order_by(DiaryEntry.date.desc())
         .limit(10)
     )
@@ -61,6 +62,7 @@ async def global_search(query: str, db: AsyncSession = Depends(get_db)):
 
     obj_res = await db.execute(
         select(KnowledgeObject).where(
+            KnowledgeObject.user_id == current_user.id,
             or_(
                 KnowledgeObject.title.ilike(f"%{clean_query}%"),
                 KnowledgeObject.description.ilike(f"%{clean_query}%"),

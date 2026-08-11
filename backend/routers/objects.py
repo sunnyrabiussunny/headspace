@@ -7,9 +7,10 @@ import uuid
 import re
 
 from database import get_db
-from models.db_models import KnowledgeObject, Mention, DiaryEntry
+from models.db_models import KnowledgeObject, Mention, DiaryEntry, User
 from models.schemas import ObjectCreate, ObjectUpdate, ObjectOut, MentionOut, MergeRequest
 from utils.mentions import extract_mentions
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/objects", tags=["objects"])
 
@@ -17,8 +18,8 @@ VALID_TYPES = {"PERSON", "PLACE", "IDEA", "ORGANIZATION", "MEDIA", "PAGE"}
 
 
 @router.get("/", response_model=List[ObjectOut])
-async def list_objects(type: Optional[str] = None, db: AsyncSession = Depends(get_db)):
-    q = select(KnowledgeObject).order_by(KnowledgeObject.updated_at.desc())
+async def list_objects(type: Optional[str] = None, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    q = select(KnowledgeObject).where(KnowledgeObject.user_id == current_user.id).order_by(KnowledgeObject.updated_at.desc())
     if type:
         q = q.where(KnowledgeObject.type == type.upper())
     result = await db.execute(q)
@@ -26,9 +27,10 @@ async def list_objects(type: Optional[str] = None, db: AsyncSession = Depends(ge
 
 
 @router.get("/search", response_model=List[ObjectOut])
-async def search_objects(q: str, db: AsyncSession = Depends(get_db)):
+async def search_objects(q: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(KnowledgeObject).where(
+            KnowledgeObject.user_id == current_user.id,
             or_(
                 KnowledgeObject.title.ilike(f"%{q}%"),
                 KnowledgeObject.description.ilike(f"%{q}%"),
@@ -40,10 +42,10 @@ async def search_objects(q: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/mention-search", response_model=List[ObjectOut])
-async def mention_search(q: str, db: AsyncSession = Depends(get_db)):
+async def mention_search(q: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(KnowledgeObject)
-        .where(KnowledgeObject.title.ilike(f"%{q}%"))
+        .where(KnowledgeObject.title.ilike(f"%{q}%"), KnowledgeObject.user_id == current_user.id)
         .order_by(KnowledgeObject.title.asc())
         .limit(8)
     )
@@ -51,14 +53,14 @@ async def mention_search(q: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/merge", response_model=ObjectOut)
-async def merge_objects(payload: MergeRequest, db: AsyncSession = Depends(get_db)):
+async def merge_objects(payload: MergeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Merge source into target: all mentions of source become mentions of target, then source is deleted."""
-    src_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == payload.source_id))
+    src_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == payload.source_id, KnowledgeObject.user_id == current_user.id))
     src = src_result.scalar_one_or_none()
     if not src:
         raise HTTPException(404, "Source object not found")
 
-    tgt_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == payload.target_id))
+    tgt_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == payload.target_id, KnowledgeObject.user_id == current_user.id))
     tgt = tgt_result.scalar_one_or_none()
     if not tgt:
         raise HTTPException(404, "Target object not found")
@@ -66,12 +68,12 @@ async def merge_objects(payload: MergeRequest, db: AsyncSession = Depends(get_db
     # Re-point all Mention rows that reference source → target
     await db.execute(
         update(Mention)
-        .where(Mention.object_id == payload.source_id)
+        .where(Mention.object_id == payload.source_id, Mention.user_id == current_user.id)
         .values(object_id=payload.target_id)
     )
 
     # Update diary entries: replace @[title](source_id) → @[target_title](target_id)
-    diary_result = await db.execute(select(DiaryEntry))
+    diary_result = await db.execute(select(DiaryEntry).where(DiaryEntry.user_id == current_user.id))
     for entry in diary_result.scalars().all():
         if entry.content and payload.source_id in entry.content:
             new_content = re.sub(
@@ -88,8 +90,8 @@ async def merge_objects(payload: MergeRequest, db: AsyncSession = Depends(get_db
         tgt.notes = (tgt.notes or "") + f"\n\n--- Merged from {src.title} ---\n{src.notes}"
 
     # Delete source
-    await db.execute(delete(Mention).where(Mention.source_id == payload.source_id))
-    await db.execute(delete(KnowledgeObject).where(KnowledgeObject.id == payload.source_id))
+    await db.execute(delete(Mention).where(Mention.source_id == payload.source_id, Mention.user_id == current_user.id))
+    await db.execute(delete(KnowledgeObject).where(KnowledgeObject.id == payload.source_id, KnowledgeObject.user_id == current_user.id))
     tgt.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(tgt)
@@ -97,9 +99,9 @@ async def merge_objects(payload: MergeRequest, db: AsyncSession = Depends(get_db
 
 
 @router.get("/{object_id}", response_model=ObjectOut)
-async def get_object(object_id: str, db: AsyncSession = Depends(get_db)):
+async def get_object(object_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(KnowledgeObject).where(KnowledgeObject.id == object_id)
+        select(KnowledgeObject).where(KnowledgeObject.id == object_id, KnowledgeObject.user_id == current_user.id)
     )
     obj = result.scalar_one_or_none()
     if not obj:
@@ -108,22 +110,23 @@ async def get_object(object_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{object_id}/mentions", response_model=List[MentionOut])
-async def get_mentions(object_id: str, db: AsyncSession = Depends(get_db)):
+async def get_mentions(object_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Mention)
-        .where(Mention.object_id == object_id)
+        .where(Mention.object_id == object_id, Mention.user_id == current_user.id)
         .order_by(Mention.created_at.desc())
     )
     return result.scalars().all()
 
 
 @router.post("/", response_model=ObjectOut, status_code=201)
-async def create_object(payload: ObjectCreate, db: AsyncSession = Depends(get_db)):
+async def create_object(payload: ObjectCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     obj_type = payload.type.upper().strip()
     if obj_type not in VALID_TYPES:
         raise HTTPException(400, f"Invalid type '{obj_type}'. Must be one of: {', '.join(sorted(VALID_TYPES))}")
     obj = KnowledgeObject(
         id=str(uuid.uuid4()),
+        user_id=current_user.id,
         type=obj_type,
         title=payload.title,
         description=payload.description,
@@ -136,16 +139,16 @@ async def create_object(payload: ObjectCreate, db: AsyncSession = Depends(get_db
     db.add(obj)
     await db.commit()
     await db.refresh(obj)
-    await _sync_mentions(db, obj)
+    await _sync_mentions(db, obj, current_user.id)
     return obj
 
 
 @router.put("/{object_id}", response_model=ObjectOut)
 async def update_object(
-    object_id: str, payload: ObjectUpdate, db: AsyncSession = Depends(get_db)
+    object_id: str, payload: ObjectUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
     result = await db.execute(
-        select(KnowledgeObject).where(KnowledgeObject.id == object_id)
+        select(KnowledgeObject).where(KnowledgeObject.id == object_id, KnowledgeObject.user_id == current_user.id)
     )
     obj = result.scalar_one_or_none()
     if not obj:
@@ -163,25 +166,26 @@ async def update_object(
 
     await db.commit()
     await db.refresh(obj)
-    await _sync_mentions(db, obj)
+    await _sync_mentions(db, obj, current_user.id)
     return obj
 
 
 @router.delete("/{object_id}", status_code=204)
-async def delete_object(object_id: str, db: AsyncSession = Depends(get_db)):
-    await db.execute(delete(Mention).where(Mention.object_id == object_id))
-    await db.execute(delete(Mention).where(Mention.source_id == object_id))
+async def delete_object(object_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await db.execute(delete(Mention).where(Mention.object_id == object_id, Mention.user_id == current_user.id))
+    await db.execute(delete(Mention).where(Mention.source_id == object_id, Mention.user_id == current_user.id))
     await db.execute(
-        delete(KnowledgeObject).where(KnowledgeObject.id == object_id)
+        delete(KnowledgeObject).where(KnowledgeObject.id == object_id, KnowledgeObject.user_id == current_user.id)
     )
     await db.commit()
 
 
-async def _sync_mentions(db: AsyncSession, obj: KnowledgeObject):
+async def _sync_mentions(db: AsyncSession, obj: KnowledgeObject, user_id: str):
     await db.execute(
         delete(Mention).where(
             Mention.source_id == obj.id,
-            Mention.source_type == "object"
+            Mention.source_type == "object",
+            Mention.user_id == user_id,
         )
     )
     mentions = extract_mentions(obj.notes or "")
@@ -190,6 +194,7 @@ async def _sync_mentions(db: AsyncSession, obj: KnowledgeObject):
             continue
         db.add(Mention(
             id=str(uuid.uuid4()),
+            user_id=user_id,
             object_id=target_id,
             source_type="object",
             source_id=obj.id,

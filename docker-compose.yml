@@ -10,6 +10,13 @@ services:
       - DATABASE_URL=sqlite:////app/data/headspace.db
       - BACKUP_DIR=/app/data/backups
       - SECRET_KEY=${SECRET_KEY:-headspace-secret-change-me}
+      # First-run admin account. If ADMIN_PASSWORD is left unset, a random
+      # password is generated and printed once to `docker compose logs backend`.
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      # Shared secret for the cron-driven cloud backup script (scripts/backup-to-cloud.sh).
+      # Required only if you set up automatic cloud backup — see scripts/README.md.
+      - CRON_SECRET=${CRON_SECRET:-}
     expose:
       - "8000"
 

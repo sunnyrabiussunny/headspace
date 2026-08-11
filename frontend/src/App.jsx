@@ -8,9 +8,12 @@ import GuidePage from './components/guide/GuidePage'
 import AllEntriesPage from './components/diary/AllEntriesPage'
 import TagsPage from './components/tags/TagsPage'
 import GlobalSearch from './components/GlobalSearch'
+import LoginPage from './components/LoginPage'
 import logoImg from './assets/logo.png'
 import TimePage from './components/time/TimePage'
 import BoardPage from './components/board/BoardPage'
+import { getToken, getStoredUser, logout } from './auth'
+import { me as fetchMe } from './api_auth'
 import styles from './App.module.css'
 
 const NAV_ITEMS = [
@@ -24,6 +27,27 @@ const NAV_ITEMS = [
 ]
 
 export default function App() {
+  const [user, setUser] = useState(() => getStoredUser())
+  const [checking, setChecking] = useState(!!getToken())
+
+  useEffect(() => {
+    if (!getToken()) { setChecking(false); return }
+    fetchMe()
+      .then(u => setUser(u))
+      .catch(() => setUser(null))
+      .finally(() => setChecking(false))
+  }, [])
+
+  if (checking) return null   // brief silent check on first load; avoids a login-page flash for valid sessions
+
+  if (!user) {
+    return <LoginPage onLoggedIn={setUser} />
+  }
+
+  return <AppShell user={user} />
+}
+
+function AppShell({ user }) {
   const [theme, setTheme] = useState(() => localStorage.getItem('hs-theme') || 'dark')
   const [showGuide, setShowGuide] = useState(() => !localStorage.getItem('hs-guide-seen'))
 
@@ -69,6 +93,12 @@ export default function App() {
           <button className={styles.themeToggle} onClick={toggleTheme} title="Toggle dark/light mode">
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </button>
+          <div className={styles.userBadge} title={user.username}>
+            <span className={styles.userBadgeName}>{user.display_name || user.username}</span>
+          </div>
+          <button className={styles.logoutBtn} onClick={logout} title="Log out">
+            <LogoutIcon size={17} />
+          </button>
         </header>
 
         {/* ── Page content ── */}
@@ -79,7 +109,7 @@ export default function App() {
             <Route path="/objects"       element={<ObjectsPage />} />
             <Route path="/objects/:id"   element={<ObjectDetailPage />} />
             <Route path="/tags"          element={<TagsPage />} />
-            <Route path="/export"        element={<ExportPage />} />
+            <Route path="/export"        element={<ExportPage user={user} />} />
 
             <Route path="/timer"             element={<TimePage />} />
             <Route path="/board"             element={<BoardPage />} />
@@ -142,3 +172,4 @@ function MoonIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fil
 function ClockIcon({ size=20 })    { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> }
 function BoardIcon({ size=20 })    { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg> }
 function DownloadIcon({ size=20 }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> }
+function LogoutIcon({ size=20 })   { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> }

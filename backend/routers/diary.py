@@ -6,25 +6,26 @@ from datetime import datetime
 import uuid
 
 from database import get_db
-from models.db_models import DiaryEntry, Mention
+from models.db_models import DiaryEntry, Mention, User
 from models.schemas import DiaryEntryCreate, DiaryEntryUpdate, DiaryEntryOut
 from utils.mentions import extract_mentions
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/diary", tags=["diary"])
 
 
 @router.get("/dates", response_model=List[str])
-async def get_all_dates(db: AsyncSession = Depends(get_db)):
+async def get_all_dates(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(DiaryEntry.date).distinct().order_by(DiaryEntry.date.desc())
+        select(DiaryEntry.date).where(DiaryEntry.user_id == current_user.id).distinct().order_by(DiaryEntry.date.desc())
     )
     return [row[0] for row in result.fetchall()]
 
 
 @router.get("/all", response_model=List[DiaryEntryOut])
-async def get_all_entries(tag: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+async def get_all_entries(tag: Optional[str] = None, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Get all diary entries sorted by date desc, optionally filtered by tag."""
-    q = select(DiaryEntry).order_by(DiaryEntry.date.desc(), DiaryEntry.created_at.asc())
+    q = select(DiaryEntry).where(DiaryEntry.user_id == current_user.id).order_by(DiaryEntry.date.desc(), DiaryEntry.created_at.asc())
     result = await db.execute(q)
     entries = result.scalars().all()
     if tag:
@@ -33,19 +34,19 @@ async def get_all_entries(tag: Optional[str] = None, db: AsyncSession = Depends(
 
 
 @router.get("/date/{date}", response_model=List[DiaryEntryOut])
-async def get_entries_for_date(date: str, db: AsyncSession = Depends(get_db)):
+async def get_entries_for_date(date: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(DiaryEntry)
-        .where(DiaryEntry.date == date)
+        .where(DiaryEntry.date == date, DiaryEntry.user_id == current_user.id)
         .order_by(DiaryEntry.created_at.asc())
     )
     return result.scalars().all()
 
 
 @router.get("/entry/{entry_id}", response_model=DiaryEntryOut)
-async def get_entry_by_id(entry_id: str, db: AsyncSession = Depends(get_db)):
+async def get_entry_by_id(entry_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(DiaryEntry).where(DiaryEntry.id == entry_id)
+        select(DiaryEntry).where(DiaryEntry.id == entry_id, DiaryEntry.user_id == current_user.id)
     )
     entry = result.scalar_one_or_none()
     if not entry:
@@ -54,9 +55,10 @@ async def get_entry_by_id(entry_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/", response_model=DiaryEntryOut, status_code=201)
-async def create_entry(payload: DiaryEntryCreate, db: AsyncSession = Depends(get_db)):
+async def create_entry(payload: DiaryEntryCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     entry = DiaryEntry(
         id=str(uuid.uuid4()),
+        user_id=current_user.id,
         date=payload.date,
         content=payload.content,
         tags=list(payload.tags),
@@ -66,15 +68,15 @@ async def create_entry(payload: DiaryEntryCreate, db: AsyncSession = Depends(get
     db.add(entry)
     await db.commit()
     await db.refresh(entry)
-    await _sync_mentions(db, entry)
+    await _sync_mentions(db, entry, current_user.id)
     return entry
 
 
 @router.put("/{entry_id}", response_model=DiaryEntryOut)
 async def update_entry(
-    entry_id: str, payload: DiaryEntryUpdate, db: AsyncSession = Depends(get_db)
+    entry_id: str, payload: DiaryEntryUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(DiaryEntry).where(DiaryEntry.id == entry_id))
+    result = await db.execute(select(DiaryEntry).where(DiaryEntry.id == entry_id, DiaryEntry.user_id == current_user.id))
     entry = result.scalar_one_or_none()
     if not entry:
         raise HTTPException(404, "Entry not found")
@@ -88,13 +90,9 @@ async def update_entry(
     if payload.created_at is not None:
         try:
             raw = payload.created_at
-            # Extract YYYY-MM-DD from the local datetime string the frontend sends
-            # e.g. "2024-06-15T09:30:00.000Z" or "2024-06-15T12:30"
-            # The date part always reflects what the user picked in their local time
             date_part = raw[:10]
             if len(date_part) == 10 and date_part[4] == "-" and date_part[7] == "-":
                 entry.date = date_part
-            # Parse to UTC for storage
             ts = raw.replace("Z", "+00:00")
             parsed = datetime.fromisoformat(ts)
             if parsed.tzinfo is not None:
@@ -108,32 +106,33 @@ async def update_entry(
 
     await db.commit()
     await db.refresh(entry)
-    await _sync_mentions(db, entry)
+    await _sync_mentions(db, entry, current_user.id)
     return entry
 
 
 @router.delete("/{entry_id}", status_code=204)
-async def delete_entry(entry_id: str, db: AsyncSession = Depends(get_db)):
-    await db.execute(delete(Mention).where(Mention.source_id == entry_id))
-    await db.execute(delete(DiaryEntry).where(DiaryEntry.id == entry_id))
+async def delete_entry(entry_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await db.execute(delete(Mention).where(Mention.source_id == entry_id, Mention.user_id == current_user.id))
+    await db.execute(delete(DiaryEntry).where(DiaryEntry.id == entry_id, DiaryEntry.user_id == current_user.id))
     await db.commit()
 
 
 @router.get("/search/{query}", response_model=List[DiaryEntryOut])
-async def search_diary(query: str, db: AsyncSession = Depends(get_db)):
+async def search_diary(query: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(DiaryEntry)
-        .where(DiaryEntry.content.contains(query))
+        .where(DiaryEntry.content.contains(query), DiaryEntry.user_id == current_user.id)
         .order_by(DiaryEntry.date.desc())
     )
     return result.scalars().all()
 
 
-async def _sync_mentions(db: AsyncSession, entry: DiaryEntry):
-    await db.execute(delete(Mention).where(Mention.source_id == entry.id))
+async def _sync_mentions(db: AsyncSession, entry: DiaryEntry, user_id: str):
+    await db.execute(delete(Mention).where(Mention.source_id == entry.id, Mention.user_id == user_id))
     for _name, object_id in extract_mentions(entry.content):
         db.add(Mention(
             id=str(uuid.uuid4()),
+            user_id=user_id,
             object_id=object_id,
             source_type="diary",
             source_id=entry.id,
@@ -142,8 +141,8 @@ async def _sync_mentions(db: AsyncSession, entry: DiaryEntry):
 
 
 @router.get("/entry/{entry_id}/context")
-async def get_entry_context(entry_id: str, object_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(DiaryEntry).where(DiaryEntry.id == entry_id))
+async def get_entry_context(entry_id: str, object_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(DiaryEntry).where(DiaryEntry.id == entry_id, DiaryEntry.user_id == current_user.id))
     entry = result.scalar_one_or_none()
     if not entry:
         raise HTTPException(404, "Entry not found")

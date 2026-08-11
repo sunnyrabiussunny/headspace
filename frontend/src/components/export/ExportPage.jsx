@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react'
-import { getExportStatus, runBackup, downloadBackup, importBackup, importCapacities } from '../../api'
-import axios from 'axios'
+import { getExportStatus, runBackup, downloadBackup, importBackup, importCapacities, deleteAllData } from '../../api'
+import { listUsers, createUser, changePassword } from '../../api_auth'
 import toast from 'react-hot-toast'
 import styles from './ExportPage.module.css'
 
 // Lazy load GuidePage to avoid any circular import issues
 const GuidePage = lazy(() => import('../guide/GuidePage'))
 
-export default function ExportPage() {
+export default function ExportPage({ user }) {
   const [settingsTab, setSettingsTab] = useState('backup')
   const [status,      setStatus]      = useState(null)
   const [loading,     setLoading]     = useState(false)
@@ -16,9 +16,55 @@ export default function ExportPage() {
   const fileRef    = useRef(null)
   const capFileRef = useRef(null)
 
+  // ── Account tab state ──
+  const [users, setUsers] = useState([])
+  const [newUsername, setNewUsername] = useState('')
+  const [newDisplayName, setNewDisplayName] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [creatingUser, setCreatingUser] = useState(false)
+  const [curPw, setCurPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [changingPw, setChangingPw] = useState(false)
+
   useEffect(() => {
     getExportStatus().then(setStatus).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (settingsTab === 'account') {
+      listUsers().then(setUsers).catch(() => {})
+    }
+  }, [settingsTab])
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault()
+    if (!newUsername.trim() || newPassword.length < 4) {
+      toast.error('Username required, password must be at least 4 characters')
+      return
+    }
+    setCreatingUser(true)
+    try {
+      await createUser({ username: newUsername.trim(), password: newPassword, display_name: newDisplayName.trim() })
+      toast.success(`Account "${newUsername.trim()}" created — they can log in now with their own separate data`)
+      setNewUsername(''); setNewDisplayName(''); setNewPassword('')
+      setUsers(await listUsers())
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to create account')
+    } finally { setCreatingUser(false) }
+  }
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault()
+    if (newPw.length < 4) { toast.error('New password must be at least 4 characters'); return }
+    setChangingPw(true)
+    try {
+      await changePassword({ current_password: curPw, new_password: newPw })
+      toast.success('Password updated')
+      setCurPw(''); setNewPw('')
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to change password')
+    } finally { setChangingPw(false) }
+  }
 
   const handleExport = async () => {
     setLoading(true)
@@ -66,7 +112,7 @@ export default function ExportPage() {
     }
     setLoading(true)
     try {
-      await axios.delete('/api/export/delete-all', { params: { confirm: 'DELETEALL' } })
+      await deleteAllData()
       toast.success('All data deleted. Reloading…')
       setShowDeleteAll(false)
       setDeleteAllInput('')
@@ -76,6 +122,7 @@ export default function ExportPage() {
   }
 
   const TABS = [
+    { id: 'account', label: '👤 Account' },
     { id: 'backup', label: '💾 Backup & Import' },
     { id: 'danger', label: '⚠️ Data Management' },
     { id: 'guide',  label: '📖 Guide' },
@@ -103,6 +150,91 @@ export default function ExportPage() {
         <Suspense fallback={<div className={styles.loading}>Loading guide…</div>}>
           <GuidePage embedded />
         </Suspense>
+      )}
+
+      {/* ── Account tab ── */}
+      {settingsTab === 'account' && (
+        <div className={styles.tabContent}>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Signed in as</div>
+            <p className={styles.cardDesc}>
+              <strong>{user?.display_name || user?.username}</strong> ({user?.username})
+            </p>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Change Password</div>
+            <form onSubmit={handleChangePassword} style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <input
+                className={styles.confirmInput}
+                type="password"
+                placeholder="Current password"
+                value={curPw}
+                onChange={e => setCurPw(e.target.value)}
+              />
+              <input
+                className={styles.confirmInput}
+                type="password"
+                placeholder="New password (min 4 characters)"
+                value={newPw}
+                onChange={e => setNewPw(e.target.value)}
+              />
+              <div className={styles.btnRow}>
+                <button className="btn btn-primary" type="submit" disabled={changingPw}>
+                  {changingPw ? 'Saving…' : 'Update Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Add Another Account</div>
+            <p className={styles.cardDesc}>
+              Give someone else — a spouse, family member — their own login. Their diary, objects, board, habits, and time tracker are completely separate from yours; nobody else can see them.
+            </p>
+            <form onSubmit={handleCreateUser} style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <input
+                className={styles.confirmInput}
+                placeholder="Username (e.g. wife)"
+                value={newUsername}
+                onChange={e => setNewUsername(e.target.value)}
+                autoCapitalize="none"
+              />
+              <input
+                className={styles.confirmInput}
+                placeholder="Display name (optional)"
+                value={newDisplayName}
+                onChange={e => setNewDisplayName(e.target.value)}
+              />
+              <input
+                className={styles.confirmInput}
+                type="password"
+                placeholder="Password (min 4 characters)"
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+              />
+              <div className={styles.btnRow}>
+                <button className="btn btn-primary" type="submit" disabled={creatingUser}>
+                  {creatingUser ? 'Creating…' : '+ Create Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Accounts on this server</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              {users.map(u => (
+                <div key={u.id} style={{ display:'flex', justifyContent:'space-between', fontSize:13, padding:'6px 0', borderBottom:'1px solid var(--divider)' }}>
+                  <span>{u.display_name || u.username}</span>
+                  <span style={{ color:'var(--text-muted)' }}>@{u.username}{u.is_admin ? ' · admin' : ''}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
       )}
 
       {/* ── Backup tab ── */}
@@ -169,10 +301,20 @@ export default function ExportPage() {
           </div>
 
           <div className={styles.card}>
-            <div className={styles.cardTitle}>Syncthing Setup</div>
+            <div className={styles.cardTitle}>☁️ Automatic Cloud Backup</div>
+            <p className={styles.cardDesc}>
+              Every account's backup folder can be synced automatically to Google Drive, Box, Dropbox, or S3
+              using the included <code>scripts/backup-to-cloud.sh</code> script (powered by rclone) on a
+              daily timer. See <code>scripts/README.md</code> in the project for setup steps.
+            </p>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Syncthing Setup (alternative)</div>
+            <p className={styles.cardDesc}>Each account's backup now lives in its own subfolder — sync the one for your account.</p>
             <ol className={styles.steps}>
               <li>Install Syncthing on your phone and computer.</li>
-              <li>Add the backup folder shown above as a shared folder.</li>
+              <li>Add your account's backup folder shown above as a shared folder.</li>
               <li>Connect devices and sync automatically.</li>
               <li>Your data is open Markdown and JSON — no lock-in.</li>
             </ol>
@@ -190,8 +332,8 @@ export default function ExportPage() {
               ⚠️ Delete All Data
             </div>
             <p className={styles.cardDesc}>
-              Permanently deletes every diary entry, object, mention, and time log.
-              This cannot be undone.
+              Permanently deletes every diary entry, object, mention, board box, habit, and time log
+              in <strong>your account only</strong> ({user?.username}) — other accounts on this server are untouched. This cannot be undone.
             </p>
             {!showDeleteAll ? (
               <button className="btn btn-danger" onClick={() => setShowDeleteAll(true)}>

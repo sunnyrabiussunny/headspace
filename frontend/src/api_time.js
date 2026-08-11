@@ -1,5 +1,6 @@
 import axios from 'axios'
-const api = axios.create({ baseURL: '/api/time' })
+import { attachAuth } from './auth'
+const api = attachAuth(axios.create({ baseURL: '/api/time' }))
 
 export const getProjects    = () => api.get('/projects').then(r => r.data)
 export const createProject  = (d) => api.post('/projects', d).then(r => r.data)

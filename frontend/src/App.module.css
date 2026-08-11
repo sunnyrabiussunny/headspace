@@ -143,3 +143,44 @@
   color: var(--text-primary);
   background: var(--bg-hover);
 }
+
+/* ── User badge + logout ── */
+.userBadge {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+.userBadgeName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.logoutBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--divider);
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+.logoutBtn:hover {
+  color: var(--accent-red);
+  background: var(--bg-hover);
+}
+@media (max-width: 768px) {
+  .userBadgeName { max-width: 70px; }
+}
