@@ -17,8 +17,20 @@ export default function HabitChecklist({ date }) {
     setLoading(true)
     try {
       const [h, c] = await Promise.all([listHabits(), getCompletions(date)])
-      setHabits(h)
-      setCompleted(new Set(c.completed))
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const withHealth = h.map(habit => {
+        const last = c.last_done?.[habit.id]
+        let health = 'red'
+        if (last) {
+          const lastDate = new Date(last + 'T00:00:00')
+          const diffDays = Math.round((today - lastDate) / 86400000)
+          if (diffDays <= 1) health = 'green'
+          else if (diffDays <= 7) health = 'yellow'
+        }
+        return { ...habit, health }
+      })
+      setHabits(withHealth)
+      setCompleted(new Set(c.done))
     } catch {}
     finally { setLoading(false) }
   }, [date])
