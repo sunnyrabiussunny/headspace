@@ -66,6 +66,10 @@ docker compose build --no-cache
 echo -e "${YELLOW}Starting Headspace...${NC}"
 docker compose up -d
 
+# ── Wait for the backend to finish first-run startup (creates admin account) ─
+echo -e "${YELLOW}Waiting for first-run setup to finish...${NC}"
+sleep 6
+
 # ── Install as systemd service ──────────────────────────────────────────────
 INSTALL_DIR=$(pwd)
 
@@ -99,6 +103,23 @@ echo -e "${GREEN}  To use from another device on your network:${NC}"
 LOCAL_IP=$(hostname -I | awk '{print $1}')
 echo -e "${CYAN}  http://${LOCAL_IP}:5151${NC}"
 echo ""
+
+# ── Show the first-run admin login (only exists on a brand new install) ─────
+ADMIN_LINE=$(docker compose logs backend 2>/dev/null | grep -A5 "first-run admin")
+if [ -n "$ADMIN_LINE" ]; then
+  echo -e "${YELLOW}  ------------------------------------------------------${NC}"
+  echo -e "${YELLOW}  FIRST LOGIN — save this now, it will not be shown again:${NC}"
+  echo "$ADMIN_LINE" | sed "s/^/  /"
+  echo -e "${YELLOW}  Log in, then change the password under Settings → Account.${NC}"
+  echo -e "${YELLOW}  ------------------------------------------------------${NC}"
+  echo ""
+else
+  echo -e "${YELLOW}  Could not read the admin login from logs yet.${NC}"
+  echo -e "${YELLOW}  Run this to see it:${NC}"
+  echo -e "${CYAN}  docker compose logs backend | grep -A5 \"first-run admin\"${NC}"
+  echo ""
+fi
+
 echo -e "${GREEN}  Service installed — starts automatically on reboot.${NC}"
 echo -e "${GREEN}  Manage: sudo systemctl start/stop/restart headspace${NC}"
 echo -e "${GREEN}  Logs:   docker compose logs -f${NC}"
