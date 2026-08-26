@@ -55,6 +55,14 @@ The script:
 5. Installs a systemd service so Headspace starts on reboot
 
 After install, open: **http://localhost:5151**
+Default username: admin
+Default password: admin
+
+To reset the password:
+```bash
+cd ~/headspace/headspace
+docker compose exec backend python3 reset_admin_password.py admin admin
+```
 
 ---
 
@@ -74,6 +82,14 @@ docker compose up -d --build
 ```
 
 Open: **http://localhost:5151**
+Default username: admin
+Default password: admin
+
+To reset the password:
+```bash
+cd ~/headspace/headspace
+docker compose exec backend python3 reset_admin_password.py admin admin
+```
 
 ---
 

@@ -66,12 +66,16 @@ export default function ExportPage({ user }) {
     } finally { setChangingPw(false) }
   }
 
+  const [justExported, setJustExported] = useState(false)
+
   const handleExport = async () => {
     setLoading(true)
     try {
       const result = await runBackup()
       setStatus(await getExportStatus())
-      toast.success(`Exported ${result.entries} entries and ${result.objects} objects`)
+      toast.success(`Exported ${result.entries} entries, ${result.objects} objects, ${result.board_boxes ?? 0} board boxes`)
+      setJustExported(true)
+      setTimeout(() => setJustExported(false), 2500)
     } catch { toast.error('Export failed') }
     finally { setLoading(false) }
   }
@@ -99,8 +103,13 @@ export default function ExportPage({ user }) {
     setLoading(true)
     try {
       const result = await importBackup(file)
-      toast.success(`Imported ${result.entries_imported} entries and ${result.objects_imported} objects`)
+      const parts = [`${result.entries_imported} entries`, `${result.objects_imported} objects`]
+      if (result.board_boxes_imported)   parts.push(`${result.board_boxes_imported} board boxes`)
+      if (result.habits_imported)        parts.push(`${result.habits_imported} habits`)
+      if (result.time_entries_imported)  parts.push(`${result.time_entries_imported} time entries`)
+      toast.success(`Imported ${parts.join(', ')}`)
       e.target.value = ''
+      setTimeout(() => window.location.reload(), 1200)
     } catch { toast.error('Import failed') }
     finally { setLoading(false) }
   }
@@ -264,11 +273,11 @@ export default function ExportPage({ user }) {
           <div className={styles.card}>
             <div className={styles.cardTitle}>Export Now</div>
             <p className={styles.cardDesc}>
-              Exports all diary entries and objects immediately.
+              Exports all diary entries, objects, board boxes, habits, and time entries immediately.
             </p>
             <div className={styles.btnRow}>
               <button className="btn btn-primary" onClick={handleExport} disabled={loading}>
-                {loading ? 'Exporting...' : 'Export Now'}
+                {loading ? 'Exporting...' : justExported ? '✓ Exported' : 'Export Now'}
               </button>
               <button className="btn btn-secondary" onClick={handleDownload}>
                 <DownloadIcon /> Download Zip

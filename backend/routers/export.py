@@ -226,10 +226,120 @@ async def download_backup(current_user: User = Depends(get_current_user), db: As
 
 @router.post("/import")
 async def import_backup(file: UploadFile = File(...), current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """Import diary entries and objects from uploaded JSON files or a zip, into the current user's account."""
+    """Import diary entries, objects, board boxes, habits, and time entries
+    from an uploaded backup zip (or a plain diary/objects JSON array), into
+    the current user's account."""
+    from routers.board import BoardBox, BoardItem
+    from routers.habits import Habit, HabitCompletion
+    from routers.time import TimeProject, TimeTask, TimeEntry
+
     content = await file.read()
     entries_count = 0
     objects_count = 0
+    board_boxes_count = 0
+    habits_count = 0
+    time_entries_count = 0
+
+    async def _upsert_board(data: dict, user_id: str):
+        nonlocal board_boxes_count
+        for box in data if isinstance(data, list) else []:
+            box_id = box.get("id")
+            if not box_id:
+                continue
+            r = await db.execute(select(BoardBox).where(BoardBox.id == box_id, BoardBox.user_id == user_id))
+            existing = r.scalar_one_or_none()
+            if existing:
+                existing.title = box.get("title", existing.title)
+                existing.color = box.get("color", existing.color)
+                existing.x = box.get("x", existing.x); existing.y = box.get("y", existing.y)
+                existing.w = box.get("w", existing.w); existing.h = box.get("h", existing.h)
+                existing.z_index = box.get("z_index", existing.z_index)
+            else:
+                db.add(BoardBox(
+                    id=box_id, user_id=user_id, title=box.get("title", "Untitled"),
+                    color=box.get("color", "#3dbfa0"), x=box.get("x", 20), y=box.get("y", 20),
+                    w=box.get("w", 260), h=box.get("h", 220), z_index=box.get("z_index", 1),
+                ))
+            board_boxes_count += 1
+            for i, item in enumerate(box.get("items", [])):
+                item_id = item.get("id")
+                if not item_id:
+                    continue
+                ir = await db.execute(select(BoardItem).where(BoardItem.id == item_id, BoardItem.user_id == user_id))
+                existing_item = ir.scalar_one_or_none()
+                if existing_item:
+                    existing_item.text = item.get("text", existing_item.text)
+                    existing_item.done = item.get("done", existing_item.done)
+                else:
+                    db.add(BoardItem(
+                        id=item_id, user_id=user_id, box_id=box_id,
+                        text=item.get("text", ""), done=item.get("done", False), sort_order=i,
+                    ))
+
+    async def _upsert_habits(data: dict, user_id: str):
+        nonlocal habits_count
+        for h in data.get("habits", []):
+            h_id = h.get("id")
+            if not h_id:
+                continue
+            r = await db.execute(select(Habit).where(Habit.id == h_id, Habit.user_id == user_id))
+            existing = r.scalar_one_or_none()
+            if existing:
+                existing.title = h.get("title", existing.title)
+                existing.icon = h.get("icon", existing.icon)
+            else:
+                db.add(Habit(id=h_id, user_id=user_id, title=h.get("title", "Habit"), icon=h.get("icon", "✅")))
+            habits_count += 1
+        for c in data.get("completions", []):
+            habit_id, date = c.get("habit_id"), c.get("date")
+            if not habit_id or not date:
+                continue
+            r = await db.execute(select(HabitCompletion).where(
+                HabitCompletion.habit_id == habit_id, HabitCompletion.date == date, HabitCompletion.user_id == user_id
+            ))
+            if not r.scalar_one_or_none():
+                db.add(HabitCompletion(id=str(uuid.uuid4()), user_id=user_id, habit_id=habit_id, date=date))
+
+    async def _upsert_time(data: dict, user_id: str):
+        nonlocal time_entries_count
+        for p in data.get("projects", []):
+            p_id = p.get("id")
+            if not p_id:
+                continue
+            r = await db.execute(select(TimeProject).where(TimeProject.id == p_id, TimeProject.user_id == user_id))
+            existing = r.scalar_one_or_none()
+            if existing:
+                existing.name = p.get("name", existing.name)
+                existing.color = p.get("color", existing.color)
+                existing.client = p.get("client", existing.client)
+            else:
+                db.add(TimeProject(id=p_id, user_id=user_id, name=p.get("name", "Project"),
+                                    color=p.get("color", "#3dbfa0"), client=p.get("client", "")))
+        for t in data.get("tasks", []):
+            t_id = t.get("id")
+            if not t_id:
+                continue
+            r = await db.execute(select(TimeTask).where(TimeTask.id == t_id, TimeTask.user_id == user_id))
+            if not r.scalar_one_or_none():
+                db.add(TimeTask(id=t_id, user_id=user_id, project_id=t.get("project_id", ""), name=t.get("name", "Task")))
+        for e in data.get("entries", []):
+            e_id = e.get("id")
+            if not e_id:
+                continue
+            r = await db.execute(select(TimeEntry).where(TimeEntry.id == e_id, TimeEntry.user_id == user_id))
+            existing = r.scalar_one_or_none()
+            start_time = datetime.fromisoformat(e["start_time"]) if e.get("start_time") else datetime.utcnow()
+            end_time = datetime.fromisoformat(e["end_time"]) if e.get("end_time") else None
+            if existing:
+                existing.description = e.get("description", existing.description)
+                existing.duration = e.get("duration", existing.duration)
+            else:
+                db.add(TimeEntry(
+                    id=e_id, user_id=user_id, project_id=e.get("project_id", ""), task_id=e.get("task_id", ""),
+                    description=e.get("description", ""), tags=json.dumps(e.get("tags", [])),
+                    start_time=start_time, end_time=end_time, duration=e.get("duration", 0),
+                ))
+            time_entries_count += 1
 
     if file.filename and file.filename.endswith(".zip"):
         buf = io.BytesIO(content)
@@ -237,8 +347,15 @@ async def import_backup(file: UploadFile = File(...), current_user: User = Depen
             for name in zf.namelist():
                 if not name.endswith(".json"):
                     continue
+                base = name.rsplit("/", 1)[-1]
                 data = json.loads(zf.read(name))
-                if "diary" in name:
+                if base == "habits.json":
+                    await _upsert_habits(data, current_user.id)
+                elif base == "time.json":
+                    await _upsert_time(data, current_user.id)
+                elif base == "board.json":
+                    await _upsert_board(data, current_user.id)
+                elif "diary" in name:
                     await _upsert_entry(db, data, current_user.id)
                     entries_count += 1
                 elif "objects" in name or "object" in name:
@@ -256,7 +373,14 @@ async def import_backup(file: UploadFile = File(...), current_user: User = Depen
                     objects_count += 1
 
     await db.commit()
-    return {"status": "ok", "entries_imported": entries_count, "objects_imported": objects_count}
+    return {
+        "status": "ok",
+        "entries_imported": entries_count,
+        "objects_imported": objects_count,
+        "board_boxes_imported": board_boxes_count,
+        "habits_imported": habits_count,
+        "time_entries_imported": time_entries_count,
+    }
 
 
 async def _upsert_entry(db: AsyncSession, data: dict, user_id: str):
