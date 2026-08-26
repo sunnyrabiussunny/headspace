@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import select
 
 from database import init_db, ensure_user_id_column, backfill_owner, AsyncSessionLocal
-from routers import diary, objects, search, export, tags, time, habits, board, auth_router
+from routers import diary, objects, search, export, tags, time, habits, board, auth_router, object_types
 from models.db_models import User
 from auth import hash_password
 
@@ -66,6 +66,8 @@ async def lifespan(app: FastAPI):
     await init_habit_tables()
     from routers.board import init_board_tables
     await init_board_tables()
+    from routers.object_types import init_object_type_tables
+    await init_object_type_tables()
     await _bootstrap_admin_and_migrate()
     yield
 
@@ -89,6 +91,7 @@ app.include_router(tags.router)
 app.include_router(time.router)
 app.include_router(habits.router)
 app.include_router(board.router)
+app.include_router(object_types.router)
 
 
 @app.get("/api/health")

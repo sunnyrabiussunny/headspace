@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { format, parseISO } from 'date-fns'
-import { updateEntry, mentionSearch, createObject, searchTags } from '../../api'
+import { updateEntry, mentionSearch, createObject, searchTags, autoTagEntry } from '../../api'
+import toast from 'react-hot-toast'
 import styles from './DiaryEditor.module.css'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
@@ -87,6 +88,25 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   const [tagSelIdx,  setTagSelIdx]  = useState(0)
   const tagAnchorRef = useRef(-1)
   const [popupTop,   setPopupTop]   = useState(null)  // px from top of .body
+  const [autoTagging, setAutoTagging] = useState(false)
+
+  const handleAutoTag = async () => {
+    setAutoTagging(true)
+    try {
+      const updated = await autoTagEntry(entry.id)
+      const segs = parseMd(updated.content || '')
+      segsRef.current = segs
+      const d = toDisplay(segs)
+      if (taRef.current) taRef.current.value = d
+      setTags(updated.tags || [])
+      onSave?.(updated)
+      toast.success('Auto-tagged existing objects it found')
+    } catch {
+      toast.error('Auto-tag failed')
+    } finally {
+      setAutoTagging(false)
+    }
+  }
 
   // Mount
   useEffect(() => {
@@ -362,6 +382,14 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
             title="Edit time"
           >
             <ClockIcon />
+          </button>
+          <button
+            className={styles.toolBtn}
+            onClick={handleAutoTag}
+            disabled={autoTagging}
+            title="Find and link mentions of objects that already exist — never creates new ones"
+          >
+            🏷️ {autoTagging ? 'Tagging…' : 'Auto-tag'}
           </button>
         </div>
         <button className={styles.delBtn} onClick={onDelete}><TrashIcon /></button>

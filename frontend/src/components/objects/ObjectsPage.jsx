@@ -1,26 +1,24 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { listObjects, createObject, deleteObject } from '../../api'
+import { listObjects, createObject, deleteObject, listObjectTypes, createObjectType } from '../../api'
 import toast from 'react-hot-toast'
 import styles from './ObjectsPage.module.css'
 
-export const TYPES = [
-  { key: null,           label: 'All',          emoji: '' },
-  { key: 'PERSON',       label: 'Person',        emoji: '👤' },
-  { key: 'PLACE',        label: 'Place',         emoji: '📍' },
-  { key: 'IDEA',         label: 'Idea',          emoji: '💡' },
-  { key: 'ORGANIZATION', label: 'Organization',  emoji: '🏢' },
-  { key: 'MEDIA',        label: 'Media',         emoji: '🎬' },
-  { key: 'PAGE',         label: 'Page',          emoji: '📄' },
-]
-
 export default function ObjectsPage() {
   const [objects, setObjects]       = useState([])
+  const [types, setTypes]           = useState([])
   const [filter, setFilter]         = useState(null)
   const [showCreate, setShowCreate] = useState(false)
   const [newTitle, setNewTitle]     = useState('')
   const [newType, setNewType]       = useState('PERSON')
+  const [showNewType, setShowNewType] = useState(false)
+  const [newTypeLabel, setNewTypeLabel] = useState('')
+  const [newTypeIcon, setNewTypeIcon]   = useState('📄')
   const navigate                    = useNavigate()
+
+  const loadTypes = () => listObjectTypes().then(setTypes).catch(() => {})
+
+  useEffect(() => { loadTypes() }, [])
 
   useEffect(() => {
     listObjects(filter).then(setObjects).catch(() => {})
@@ -38,6 +36,21 @@ export default function ObjectsPage() {
     }
   }
 
+  const handleCreateType = async () => {
+    if (!newTypeLabel.trim()) return
+    try {
+      const t = await createObjectType({ label: newTypeLabel.trim(), icon: newTypeIcon })
+      setTypes(prev => [...prev, t])
+      setNewType(t.key)
+      setNewTypeLabel(''); setNewTypeIcon('📄'); setShowNewType(false)
+      toast.success(`"${t.label}" object type created`)
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to create object type')
+    }
+  }
+
+  const typeMeta = (key) => types.find(t => t.key === key)
+
   return (
     <div className={styles.page}>
       <div className={styles.header}>
@@ -49,13 +62,19 @@ export default function ObjectsPage() {
 
       {/* Type filter chips */}
       <div className={styles.chips}>
-        {TYPES.map(t => (
+        <button
+          className={`${styles.chip} ${filter === null ? styles.chipActive : ''}`}
+          onClick={() => setFilter(null)}
+        >
+          All
+        </button>
+        {types.map(t => (
           <button
-            key={t.key ?? 'all'}
+            key={t.key}
             className={`${styles.chip} ${filter === t.key ? styles.chipActive : ''}`}
             onClick={() => setFilter(t.key)}
           >
-            {t.emoji && <span>{t.emoji}</span>}
+            <span>{t.icon}</span>
             {t.label}
           </button>
         ))}
@@ -75,11 +94,11 @@ export default function ObjectsPage() {
             onClick={() => navigate(`/objects/${obj.id}`)}
           >
             <span className={styles.objEmoji}>
-              {TYPES.find(t => t.key === obj.type)?.emoji ?? '📄'}
+              {typeMeta(obj.type)?.icon ?? '📄'}
             </span>
             <div className={styles.objInfo}>
               <span className={styles.objTitle}>{obj.title}</span>
-              <span className={styles.objType}>{obj.type}</span>
+              <span className={styles.objType}>{typeMeta(obj.type)?.label ?? obj.type}</span>
               {obj.description && (
                 <span className={styles.objDesc}>{obj.description.slice(0, 80)}</span>
               )}
@@ -101,17 +120,43 @@ export default function ObjectsPage() {
             <h2 className={styles.modalTitle}>New Object</h2>
 
             <div className={styles.typeGrid}>
-              {TYPES.filter(t => t.key).map(t => (
+              {types.map(t => (
                 <button
                   key={t.key}
                   className={`${styles.typeOption} ${newType === t.key ? styles.typeOptionActive : ''}`}
                   onClick={() => setNewType(t.key)}
                 >
-                  <span>{t.emoji}</span>
+                  <span>{t.icon}</span>
                   <span>{t.label}</span>
                 </button>
               ))}
+              <button
+                className={styles.typeOption}
+                onClick={() => setShowNewType(v => !v)}
+              >
+                <span>➕</span>
+                <span>New Type</span>
+              </button>
             </div>
+
+            {showNewType && (
+              <div className={styles.newTypeRow}>
+                <input
+                  className={styles.newTypeIconInput}
+                  value={newTypeIcon}
+                  onChange={e => setNewTypeIcon(e.target.value.slice(0, 4))}
+                  maxLength={4}
+                />
+                <input
+                  className={styles.nameInput}
+                  placeholder="Type name, e.g. Recipe"
+                  value={newTypeLabel}
+                  onChange={e => setNewTypeLabel(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleCreateType()}
+                />
+                <button className="btn btn-secondary" onClick={handleCreateType}>Add</button>
+              </div>
+            )}
 
             <input
               className={styles.nameInput}

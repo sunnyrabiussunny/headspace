@@ -9,12 +9,17 @@ import re
 from database import get_db
 from models.db_models import KnowledgeObject, Mention, DiaryEntry, User
 from models.schemas import ObjectCreate, ObjectUpdate, ObjectOut, MentionOut, MergeRequest
-from utils.mentions import extract_mentions
+from utils.mentions import extract_mentions, auto_tag_content
 from auth import get_current_user
+from routers.object_types import ObjectType, seed_default_types
 
 router = APIRouter(prefix="/api/objects", tags=["objects"])
 
-VALID_TYPES = {"PERSON", "PLACE", "IDEA", "ORGANIZATION", "MEDIA", "PAGE"}
+
+async def _valid_type(db: AsyncSession, user_id: str, type_key: str) -> bool:
+    await seed_default_types(db, user_id)
+    r = await db.execute(select(ObjectType.key).where(ObjectType.user_id == user_id, ObjectType.key == type_key))
+    return r.scalar_one_or_none() is not None
 
 
 @router.get("/", response_model=List[ObjectOut])
@@ -122,8 +127,8 @@ async def get_mentions(object_id: str, current_user: User = Depends(get_current_
 @router.post("/", response_model=ObjectOut, status_code=201)
 async def create_object(payload: ObjectCreate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     obj_type = payload.type.upper().strip()
-    if obj_type not in VALID_TYPES:
-        raise HTTPException(400, f"Invalid type '{obj_type}'. Must be one of: {', '.join(sorted(VALID_TYPES))}")
+    if not await _valid_type(db, current_user.id, obj_type):
+        raise HTTPException(400, f"Invalid type '{obj_type}'. Create it first in Objects → + New Type.")
     obj = KnowledgeObject(
         id=str(uuid.uuid4()),
         user_id=current_user.id,
@@ -178,6 +183,30 @@ async def delete_object(object_id: str, current_user: User = Depends(get_current
         delete(KnowledgeObject).where(KnowledgeObject.id == object_id, KnowledgeObject.user_id == current_user.id)
     )
     await db.commit()
+
+
+@router.post("/{object_id}/auto-tag", response_model=ObjectOut)
+async def auto_tag_object_notes(object_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Scan this object's notes for plain-text mentions of other existing
+    objects and link them. Never creates new objects. Especially useful for
+    Recording transcripts with dialogue mentioning people by name."""
+    result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.id == object_id, KnowledgeObject.user_id == current_user.id))
+    obj = result.scalar_one_or_none()
+    if not obj:
+        raise HTTPException(404, "Object not found")
+
+    others_result = await db.execute(
+        select(KnowledgeObject).where(KnowledgeObject.user_id == current_user.id, KnowledgeObject.id != object_id)
+    )
+    others = others_result.scalars().all()
+
+    new_notes, count = auto_tag_content(obj.notes or "", others)
+    obj.notes = new_notes
+    obj.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(obj)
+    await _sync_mentions(db, obj, current_user.id)
+    return obj
 
 
 async def _sync_mentions(db: AsyncSession, obj: KnowledgeObject, user_id: str):

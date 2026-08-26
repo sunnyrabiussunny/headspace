@@ -4,22 +4,23 @@ import { getEntries as getTimeEntries, getProjects as getTimeProjects, fmtHours 
 import {
   getObject, updateObject, deleteObject,
   getMentions, mentionSearch, createObject, getEntryContext,
-  listObjects, mergeObjects
+  listObjects, mergeObjects, listObjectTypes, autoTagObjectNotes
 } from '../../api'
 import toast from 'react-hot-toast'
 import styles from './ObjectDetailPage.module.css'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
-const TYPE_META  = {
-  PERSON:       { emoji:'👤', color:'#c97c4e', bg:'#2d1f17' },
-  PLACE:        { emoji:'📍', color:'#5b8def', bg:'#172030' },
-  IDEA:         { emoji:'💡', color:'#e0c040', bg:'#2a2010' },
-  ORGANIZATION: { emoji:'🏢', color:'#3dbfa0', bg:'#112620' },
-  MEDIA:        { emoji:'🎬', color:'#9b6fd4', bg:'#1e1228' },
-  PAGE:         { emoji:'📄', color:'#60b8d4', bg:'#122028' },
+// Fixed color accents for the built-in types; anything else (custom types) falls back to a neutral color.
+const TYPE_COLORS = {
+  PERSON:       { color:'#c97c4e', bg:'#2d1f17' },
+  PLACE:        { color:'#5b8def', bg:'#172030' },
+  IDEA:         { color:'#e0c040', bg:'#2a2010' },
+  ORGANIZATION: { color:'#3dbfa0', bg:'#112620' },
+  MEDIA:        { color:'#9b6fd4', bg:'#1e1228' },
+  PAGE:         { color:'#60b8d4', bg:'#122028' },
+  RECORDING:    { color:'#e06f8b', bg:'#2a1620' },
 }
-const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢', MEDIA:'🎬', PAGE:'📄' }
-const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION','MEDIA','PAGE']
+const DEFAULT_TYPE_COLOR = { color:'#8a8a8a', bg:'#1c1c1c' }
 
 const OBJ_TAG_RE = /#([a-zA-Z][a-zA-Z0-9_-]{0,39})/g
 function extractTagsFromText(text) {
@@ -144,6 +145,31 @@ export default function ObjectDetailPage() {
   const [editMeta,   setEditMeta]   = useState(false)
   const [editDesc,   setEditDesc]   = useState('')
   const [editType,   setEditType]   = useState('')
+  const [types,      setTypes]      = useState([])
+  const [autoTagging, setAutoTagging] = useState(false)
+
+  useEffect(() => { listObjectTypes().then(setTypes).catch(() => {}) }, [])
+  const typeEmoji = (t) => types.find(x => x.key === t)?.icon || '📄'
+  const typeLabel = (t) => types.find(x => x.key === t)?.label || (t ? t.charAt(0) + t.slice(1).toLowerCase() : '')
+  const typeColors = (t) => TYPE_COLORS[t] || DEFAULT_TYPE_COLOR
+
+  const handleAutoTagNotes = async () => {
+    setAutoTagging(true)
+    try {
+      const updated = await autoTagObjectNotes(id)
+      const segs = parseMd(updated.notes || '')
+      segsRef.current = segs
+      const d = toDisplay(segs)
+      if (taRef.current) taRef.current.value = d
+      pendingDisplayRef.current = d
+      setNotesMd(updated.notes || '')
+      toast.success('Auto-tagged existing objects it found')
+    } catch {
+      toast.error('Auto-tag failed')
+    } finally {
+      setAutoTagging(false)
+    }
+  }
 
   // Load object
   useEffect(() => {
@@ -395,7 +421,7 @@ export default function ObjectDetailPage() {
   }
 
   if (!obj) return <div className={styles.loading}>Loading...</div>
-  const meta = TYPE_META[obj.type] || TYPE_META.IDEA
+  const meta = { emoji: typeEmoji(obj.type), ...typeColors(obj.type) }
 
   const filteredForMerge = allObjects.filter(o =>
     !mergeSearch || o.title.toLowerCase().includes(mergeSearch.toLowerCase())
@@ -423,7 +449,7 @@ export default function ObjectDetailPage() {
 
       <div className={styles.typeRow}>
         <span className={styles.typeBadge} style={{ background: meta.bg, color: meta.color }}>
-          {meta.emoji} {obj.type}
+          {meta.emoji} {typeLabel(obj.type)}
         </span>
         <button className={styles.editMetaBtn} onClick={openEditMeta} title="Edit type & description">
           <EditIcon /> Edit
@@ -435,11 +461,11 @@ export default function ObjectDetailPage() {
           <div className={styles.metaEditorRow}>
             <label className={styles.metaLabel}>Type</label>
             <div className={styles.typeChips}>
-              {['PERSON','PLACE','IDEA','ORGANIZATION','MEDIA'].map(t => (
-                <button key={t}
-                  className={`${styles.typeChip} ${editType === t ? styles.typeChipActive : ''}`}
-                  onClick={() => setEditType(t)}>
-                  {TYPE_EMOJI[t]} {t.charAt(0)+t.slice(1).toLowerCase()}
+              {types.map(t => (
+                <button key={t.key}
+                  className={`${styles.typeChip} ${editType === t.key ? styles.typeChipActive : ''}`}
+                  onClick={() => setEditType(t.key)}>
+                  {t.icon} {t.label}
                 </button>
               ))}
             </div>
@@ -523,6 +549,10 @@ export default function ObjectDetailPage() {
           <>
             <div className={styles.notesEditorHeader}>
               <span className={styles.notesEditingLabel}>Editing notes</span>
+              <button className={styles.editMetaBtn} onClick={handleAutoTagNotes} disabled={autoTagging}
+                title="Find and link mentions of objects that already exist — never creates new ones">
+                🏷️ {autoTagging ? 'Tagging…' : 'Auto-tag'}
+              </button>
               <button className={styles.doneBtn} onClick={handleDone}><CheckIcon /> Done</button>
             </div>
             <textarea
@@ -551,7 +581,7 @@ export default function ObjectDetailPage() {
                 className={`${styles.popupRow} ${i === selIdx ? styles.active : ''}`}
                 onMouseEnter={() => setSelIdx(i)}
                 onMouseDown={e => { e.preventDefault(); doInsert(o) }}>
-                <span className={styles.popupEmoji}>{TYPE_EMOJI[o.type] || '📄'}</span>
+                <span className={styles.popupEmoji}>{typeEmoji(o.type)}</span>
                 <span className={styles.popupTitle}>{o.title}</span>
                 <span className={styles.popupType}>{o.type}</span>
               </div>
@@ -564,11 +594,11 @@ export default function ObjectDetailPage() {
                   <span className={styles.createLabel}>Create "{query.trim()}" as:</span>
                 </div>
                 <div className={styles.typeRow2}>
-                  {TYPE_NAMES.map(t => (
-                    <button key={t}
-                      className={`${styles.typeBtn} ${createType === t ? styles.typeBtnActive : ''}`}
-                      onMouseDown={e => { e.preventDefault(); setCreateType(t) }}>
-                      {TYPE_EMOJI[t]} {t.charAt(0) + t.slice(1).toLowerCase()}
+                  {types.map(t => (
+                    <button key={t.key}
+                      className={`${styles.typeBtn} ${createType === t.key ? styles.typeBtnActive : ''}`}
+                      onMouseDown={e => { e.preventDefault(); setCreateType(t.key) }}>
+                      {t.icon} {t.label}
                     </button>
                   ))}
                 </div>
@@ -660,7 +690,7 @@ export default function ObjectDetailPage() {
                   className={`${styles.mergeRow} ${mergeTarget === o.id ? styles.mergeRowActive : ''}`}
                   onClick={() => setMergeTarget(o.id)}
                 >
-                  <span>{TYPE_EMOJI[o.type] || '📄'}</span>
+                  <span>{typeEmoji(o.type)}</span>
                   <span className={styles.mergeRowTitle}>{o.title}</span>
                   <span className={styles.mergeRowType}>{o.type}</span>
                 </button>

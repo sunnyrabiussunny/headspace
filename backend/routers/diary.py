@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 import uuid
@@ -8,7 +9,9 @@ import uuid
 from database import get_db
 from models.db_models import DiaryEntry, Mention, User
 from models.schemas import DiaryEntryCreate, DiaryEntryUpdate, DiaryEntryOut
-from utils.mentions import extract_mentions
+from utils.mentions import extract_mentions, auto_tag_content
+from utils.mentions import strip_mentions
+from utils.ollama_client import retrieve_relevant_entries, ask_ollama
 from auth import get_current_user
 
 router = APIRouter(prefix="/api/diary", tags=["diary"])
@@ -117,6 +120,56 @@ async def delete_entry(entry_id: str, current_user: User = Depends(get_current_u
     await db.commit()
 
 
+class AskRequest(BaseModel):
+    question: str
+
+
+@router.post("/ask")
+async def ask_diary(payload: AskRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """'Ask Your Diary' — retrieves relevant entries (keyword overlap +
+    recency, no vector DB needed at this scale) and asks the local Ollama
+    model to answer using only those excerpts."""
+    question = payload.question.strip()
+    if not question:
+        raise HTTPException(400, "Question required")
+
+    result = await db.execute(select(DiaryEntry).where(DiaryEntry.user_id == current_user.id))
+    entries = result.scalars().all()
+    if not entries:
+        return {"answer": "You don't have any diary entries yet — nothing to search.", "sources": []}
+
+    top_entries = retrieve_relevant_entries(question, entries, top_n=12)
+    context = [(e.date, strip_mentions(e.content or "")) for e in top_entries]
+
+    answer = await ask_ollama(question, context)
+
+    return {
+        "answer": answer,
+        "sources": [{"id": e.id, "date": e.date, "snippet": strip_mentions(e.content or "")[:140]} for e in top_entries],
+    }
+
+
+@router.get("/on-this-day/{date}")
+async def on_this_day(date: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Return entries from the same month/day in previous years (multi-year diary recall)."""
+    try:
+        month_day = date[5:10]   # "MM-DD"
+    except Exception:
+        raise HTTPException(400, "date must be YYYY-MM-DD")
+
+    result = await db.execute(
+        select(DiaryEntry)
+        .where(DiaryEntry.user_id == current_user.id, DiaryEntry.date.like(f"%-{month_day}"))
+        .order_by(DiaryEntry.date.desc())
+    )
+    entries = [e for e in result.scalars().all() if e.date != date]
+    return [{
+        "id": e.id, "date": e.date, "year": e.date[:4],
+        "years_ago": int(date[:4]) - int(e.date[:4]),
+        "content": e.content, "tags": e.tags or [],
+    } for e in entries]
+
+
 @router.get("/search/{query}", response_model=List[DiaryEntryOut])
 async def search_diary(query: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -125,6 +178,28 @@ async def search_diary(query: str, current_user: User = Depends(get_current_user
         .order_by(DiaryEntry.date.desc())
     )
     return result.scalars().all()
+
+
+@router.post("/{entry_id}/auto-tag", response_model=DiaryEntryOut)
+async def auto_tag_entry(entry_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Scan the entry for plain-text mentions of existing objects and link
+    them. Never creates new objects — only tags names that already exist."""
+    from models.db_models import KnowledgeObject
+    result = await db.execute(select(DiaryEntry).where(DiaryEntry.id == entry_id, DiaryEntry.user_id == current_user.id))
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise HTTPException(404, "Entry not found")
+
+    objs_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.user_id == current_user.id))
+    objects = objs_result.scalars().all()
+
+    new_content, count = auto_tag_content(entry.content, objects)
+    entry.content = new_content
+    entry.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(entry)
+    await _sync_mentions(db, entry, current_user.id)
+    return entry
 
 
 async def _sync_mentions(db: AsyncSession, entry: DiaryEntry, user_id: str):

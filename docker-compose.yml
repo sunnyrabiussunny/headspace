@@ -17,6 +17,13 @@ services:
       # Shared secret for the cron-driven cloud backup script (scripts/backup-to-cloud.sh).
       # Required only if you set up automatic cloud backup — see scripts/README.md.
       - CRON_SECRET=${CRON_SECRET:-}
+      # "Ask Your Diary" — local Ollama instance. Defaults to your NAS's LAN
+      # IP; change if Ollama runs elsewhere. Needs to be reachable from
+      # inside the backend container (LAN IP works; host.docker.internal
+      # also works if you add `extra_hosts: ["host.docker.internal:host-gateway"]`
+      # below).
+      - OLLAMA_URL=${OLLAMA_URL:-http://192.168.10.103:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:3b}
     expose:
       - "8000"
 

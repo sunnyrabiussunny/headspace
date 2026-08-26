@@ -72,3 +72,18 @@ export const toggleHabit        = (habit_id, date) => api.post('/habits/toggle',
 export const createHabit        = (data) => api.post('/habits', data).then(r => r.data)
 export const updateHabit        = (id, data) => api.put(`/habits/${id}`, data).then(r => r.data)
 export const deleteHabit        = (id) => api.delete(`/habits/${id}`)
+
+// ── Object Types ───────────────────────────────────────────────────────────
+export const listObjectTypes    = () => api.get('/object-types').then(r => r.data)
+export const createObjectType   = (data) => api.post('/object-types', data).then(r => r.data)
+export const deleteObjectType   = (key) => api.delete(`/object-types/${key}`)
+
+// ── Auto-tag ───────────────────────────────────────────────────────────────
+export const autoTagEntry       = (entryId) => api.post(`/diary/${entryId}/auto-tag`).then(r => r.data)
+export const autoTagObjectNotes = (objectId) => api.post(`/objects/${objectId}/auto-tag`).then(r => r.data)
+
+// ── On This Day ────────────────────────────────────────────────────────────
+export const getOnThisDay       = (date) => api.get(`/diary/on-this-day/${date}`).then(r => r.data)
+
+// ── Ask Your Diary ─────────────────────────────────────────────────────────
+export const askDiary           = (question) => api.post('/diary/ask', { question }).then(r => r.data)

@@ -9,6 +9,7 @@ import AllEntriesPage from './components/diary/AllEntriesPage'
 import TagsPage from './components/tags/TagsPage'
 import GlobalSearch from './components/GlobalSearch'
 import LoginPage from './components/LoginPage'
+import AskDiaryModal from './components/AskDiaryModal'
 import logoImg from './assets/logo.png'
 import TimePage from './components/time/TimePage'
 import BoardPage from './components/board/BoardPage'
@@ -50,6 +51,7 @@ export default function App() {
 function AppShell({ user }) {
   const [theme, setTheme] = useState(() => localStorage.getItem('hs-theme') || 'dark')
   const [showGuide, setShowGuide] = useState(() => !localStorage.getItem('hs-guide-seen'))
+  const [askOpen, setAskOpen] = useState(false)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -90,6 +92,9 @@ function AppShell({ user }) {
         {/* ── Global top bar ── */}
         <header className={styles.topbar}>
           <GlobalSearch />
+          <button className={styles.themeToggle} onClick={() => setAskOpen(true)} title="Ask Your Diary">
+            💬
+          </button>
           <button className={styles.themeToggle} onClick={toggleTheme} title="Toggle dark/light mode">
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
           </button>
@@ -156,6 +161,8 @@ function AppShell({ user }) {
           </NavLink>
         ))}
       </nav>
+
+      {askOpen && <AskDiaryModal onClose={() => setAskOpen(false)} />}
     </div>
   )
 }
