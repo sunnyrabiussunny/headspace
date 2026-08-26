@@ -22,8 +22,8 @@ services:
       # inside the backend container (LAN IP works; host.docker.internal
       # also works if you add `extra_hosts: ["host.docker.internal:host-gateway"]`
       # below).
-      - OLLAMA_URL=${OLLAMA_URL:-http://192.168.10.103:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:3b}
+      - OLLAMA_URL=${OLLAMA_URL:-http://192.168.10.120:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:latest}
     expose:
       - "8000"
 

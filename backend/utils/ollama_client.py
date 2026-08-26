@@ -11,8 +11,8 @@ import os
 import re
 import httpx
 
-OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://192.168.10.103:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://192.168.10.120:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "60"))
 
 STOPWORDS = {
