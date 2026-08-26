@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { format, parseISO } from 'date-fns'
-import { updateEntry, mentionSearch, createObject, searchTags, autoTagEntry } from '../../api'
+import { updateEntry, mentionSearch, createObject, searchTags, autoTagEntry, listObjectTypes } from '../../api'
 import toast from 'react-hot-toast'
 import styles from './DiaryEditor.module.css'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
 const TAG_RE     = /#([a-zA-Z0-9_\-]+)/g
-const TYPE_EMOJI = { PERSON:'👤', PLACE:'📍', IDEA:'💡', ORGANIZATION:'🏢', MEDIA:'🎬', PAGE:'📄' }
-const TYPE_NAMES = ['PERSON','PLACE','IDEA','ORGANIZATION','MEDIA','PAGE']
 
 const TEMPLATES = [
   {
@@ -79,6 +77,10 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   const [results,    setResults]    = useState([])
   const [selIdx,     setSelIdx]     = useState(0)
   const [createType, setCreateType] = useState('PERSON')
+  const [types, setTypes] = useState([])
+  useEffect(() => { listObjectTypes().then(setTypes).catch(() => {}) }, [])
+  const typeEmoji = (t) => types.find(x => x.key === t)?.icon || '📄'
+  const typeLabel = (t) => types.find(x => x.key === t)?.label || (t ? t.charAt(0) + t.slice(1).toLowerCase() : '')
   const [tags,       setTags]       = useState(entry.tags || [])
   const [showTemplates, setShowTemplates] = useState(false)
   const [showTimeEdit, setShowTimeEdit]   = useState(false)
@@ -470,7 +472,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
                 className={`${styles.popupRow} ${i === selIdx ? styles.active : ''}`}
                 onMouseEnter={() => setSelIdx(i)}
                 onMouseDown={e => { e.preventDefault(); doInsert(obj) }}>
-                <span className={styles.popupEmoji}>{TYPE_EMOJI[obj.type] || '📄'}</span>
+                <span className={styles.popupEmoji}>{typeEmoji(obj.type)}</span>
                 <span className={styles.popupTitle}>{obj.title}</span>
                 <span className={styles.popupType}>{obj.type}</span>
               </div>
@@ -483,11 +485,11 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
                   <span className={styles.createLabel}>Create "{query.trim()}" as:</span>
                 </div>
                 <div className={styles.typeRow}>
-                  {TYPE_NAMES.map(t => (
-                    <button key={t}
-                      className={`${styles.typeBtn} ${createType === t ? styles.typeBtnActive : ''}`}
-                      onMouseDown={e => { e.preventDefault(); setCreateType(t) }}>
-                      {TYPE_EMOJI[t]} {t.charAt(0) + t.slice(1).toLowerCase()}
+                  {types.map(t => (
+                    <button key={t.key}
+                      className={`${styles.typeBtn} ${createType === t.key ? styles.typeBtnActive : ''}`}
+                      onMouseDown={e => { e.preventDefault(); setCreateType(t.key) }}>
+                      {t.icon} {t.label}
                     </button>
                   ))}
                 </div>
