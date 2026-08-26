@@ -48,6 +48,9 @@ export default function LoginPage({ onLoggedIn }) {
           value={password}
           onChange={e => setPassword(e.target.value)}
         />
+        <p className={styles.defaultHint}>
+          First time here? Default login is <strong>admin</strong> / <strong>admin</strong> — change it under Settings → Account after signing in.
+        </p>
 
         {error && <div className={styles.error}>{error}</div>}
 

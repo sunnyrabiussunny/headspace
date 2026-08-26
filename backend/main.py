@@ -1,5 +1,4 @@
 import os
-import secrets as _secrets
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -32,8 +31,8 @@ async def _bootstrap_admin_and_migrate():
             return
 
         username = os.getenv("ADMIN_USERNAME", "admin").strip().lower()
-        password = os.getenv("ADMIN_PASSWORD", "") or _secrets.token_urlsafe(9)
-        generated = not os.getenv("ADMIN_PASSWORD")
+        password = os.getenv("ADMIN_PASSWORD", "") or "admin"
+        is_default = not os.getenv("ADMIN_PASSWORD")
 
         pw_hash, salt = hash_password(password)
         admin = User(
@@ -44,14 +43,15 @@ async def _bootstrap_admin_and_migrate():
         await db.commit()
         await db.refresh(admin)
 
-        if generated:
-            print("=" * 60)
-            print(" HEADSPACE — first-run admin account created")
-            print(f"   username: {username}")
-            print(f"   password: {password}")
-            print(" Log in and change this password, or set ADMIN_USERNAME /")
+        print("=" * 60)
+        print(" HEADSPACE — first-run admin account created")
+        print(f"   username: {username}")
+        print(f"   password: {password}")
+        if is_default:
+            print(" This is a DEFAULT password — change it under Settings →")
+            print(" Account right after logging in, or set ADMIN_USERNAME /")
             print(" ADMIN_PASSWORD in docker-compose.yml before first run.")
-            print("=" * 60)
+        print("=" * 60)
 
     for table in LEGACY_TABLES:
         await backfill_owner(table, admin.id)
