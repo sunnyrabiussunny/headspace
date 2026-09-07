@@ -1,11 +1,12 @@
 import os
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy import select
 
 from database import init_db, ensure_user_id_column, backfill_owner, AsyncSessionLocal
-from routers import diary, objects, search, export, tags, time, habits, board, auth_router, object_types
+from routers import diary, objects, search, export, tags, time, habits, board, auth_router, object_types, calendar
 from models.db_models import User
 from auth import hash_password
 
@@ -68,8 +69,13 @@ async def lifespan(app: FastAPI):
     await init_board_tables()
     from routers.object_types import init_object_type_tables
     await init_object_type_tables()
+    from routers.calendar import init_calendar_tables, calendar_sync_loop
+    await init_calendar_tables()
     await _bootstrap_admin_and_migrate()
+
+    sync_task = asyncio.create_task(calendar_sync_loop())
     yield
+    sync_task.cancel()
 
 
 app = FastAPI(title="Headspace API", version="1.0.0", lifespan=lifespan)
@@ -92,6 +98,7 @@ app.include_router(time.router)
 app.include_router(habits.router)
 app.include_router(board.router)
 app.include_router(object_types.router)
+app.include_router(calendar.router)
 
 
 @app.get("/api/health")

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react'
-import { getExportStatus, runBackup, downloadBackup, importBackup, importCapacities, deleteAllData } from '../../api'
+import { getExportStatus, runBackup, downloadBackup, importBackup, importCapacities, deleteAllData,
+         listCalendarFeeds, createCalendarFeed, syncCalendarFeed, deleteCalendarFeed } from '../../api'
 import { listUsers, createUser, changePassword } from '../../api_auth'
 import toast from 'react-hot-toast'
 import styles from './ExportPage.module.css'
@@ -16,7 +17,50 @@ export default function ExportPage({ user }) {
   const fileRef    = useRef(null)
   const capFileRef = useRef(null)
 
-  // ── Account tab state ──
+  // ── Calendars tab state ──
+  const [feeds, setFeeds] = useState([])
+  const [feedName, setFeedName] = useState('')
+  const [feedUrl, setFeedUrl] = useState('')
+  const [addingFeed, setAddingFeed] = useState(false)
+  const [syncingFeedId, setSyncingFeedId] = useState(null)
+
+  useEffect(() => {
+    if (settingsTab === 'calendars') {
+      listCalendarFeeds().then(setFeeds).catch(() => {})
+    }
+  }, [settingsTab])
+
+  const handleAddFeed = async (e) => {
+    e.preventDefault()
+    if (!feedUrl.trim()) { toast.error('Feed URL required'); return }
+    setAddingFeed(true)
+    try {
+      const feed = await createCalendarFeed({ name: feedName.trim() || 'Calendar', url: feedUrl.trim() })
+      setFeeds(prev => [...prev, feed])
+      setFeedName(''); setFeedUrl('')
+      if (feed.last_error) toast.error(`Added, but sync failed: ${feed.last_error}`)
+      else toast.success(`"${feed.name}" connected and synced`)
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Failed to add calendar')
+    } finally { setAddingFeed(false) }
+  }
+
+  const handleSyncFeed = async (id) => {
+    setSyncingFeedId(id)
+    try {
+      const updated = await syncCalendarFeed(id)
+      setFeeds(prev => prev.map(f => f.id === id ? updated : f))
+      if (updated.last_error) toast.error(updated.last_error)
+      else toast.success('Synced')
+    } catch { toast.error('Sync failed') }
+    finally { setSyncingFeedId(null) }
+  }
+
+  const handleDeleteFeed = async (id) => {
+    if (!window.confirm('Remove this calendar? Its events will be deleted from Headspace (the source calendar is untouched).')) return
+    setFeeds(prev => prev.filter(f => f.id !== id))
+    try { await deleteCalendarFeed(id) } catch { toast.error('Failed to remove calendar') }
+  }
   const [users, setUsers] = useState([])
   const [newUsername, setNewUsername] = useState('')
   const [newDisplayName, setNewDisplayName] = useState('')
@@ -132,6 +176,7 @@ export default function ExportPage({ user }) {
 
   const TABS = [
     { id: 'account', label: '👤 Account' },
+    { id: 'calendars', label: '📅 Calendars' },
     { id: 'backup', label: '💾 Backup & Import' },
     { id: 'danger', label: '⚠️ Data Management' },
     { id: 'guide',  label: '📖 Guide' },
@@ -241,6 +286,69 @@ export default function ExportPage({ user }) {
                 </div>
               ))}
             </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* ── Calendars tab ── */}
+      {settingsTab === 'calendars' && (
+        <div className={styles.tabContent}>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Connect a Calendar</div>
+            <p className={styles.cardDesc}>
+              Paste a Google Calendar or Outlook Calendar "Secret address in iCal format" (.ics) link.
+              Headspace polls it every 30 minutes and shows today's events at the top of your Diary — one-way,
+              read-only. Editing an event in Google/Outlook updates here automatically; nothing goes the other way.
+            </p>
+            <form onSubmit={handleAddFeed} style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <input
+                className={styles.confirmInput}
+                placeholder="Name (e.g. Work Google Calendar)"
+                value={feedName}
+                onChange={e => setFeedName(e.target.value)}
+              />
+              <input
+                className={styles.confirmInput}
+                placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
+                value={feedUrl}
+                onChange={e => setFeedUrl(e.target.value)}
+              />
+              <div className={styles.btnRow}>
+                <button className="btn btn-primary" type="submit" disabled={addingFeed}>
+                  {addingFeed ? 'Connecting…' : '+ Connect Calendar'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Connected Calendars</div>
+            {feeds.length === 0 && <p className={styles.cardDesc}>No calendars connected yet.</p>}
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {feeds.map(f => (
+                <div key={f.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderBottom:'1px solid var(--divider)' }}>
+                  <span style={{ width:10, height:10, borderRadius:'50%', background:f.color, flexShrink:0 }} />
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600 }}>{f.name}</div>
+                    <div style={{ fontSize:11, color: f.last_error ? 'var(--accent-red)' : 'var(--text-muted)' }}>
+                      {f.last_error ? f.last_error : f.last_synced_at ? `Last synced ${new Date(f.last_synced_at).toLocaleString()}` : 'Not synced yet'}
+                    </div>
+                  </div>
+                  <button className="btn btn-secondary" onClick={() => handleSyncFeed(f.id)} disabled={syncingFeedId === f.id}>
+                    {syncingFeedId === f.id ? 'Syncing…' : 'Sync now'}
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => handleDeleteFeed(f.id)}>Remove</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>How to get your .ics link</div>
+            <p className={styles.cardDesc}><strong>Google Calendar:</strong> Settings → select your calendar under "Settings for my calendars" → "Integrate calendar" → copy "Secret address in iCal format".</p>
+            <p className={styles.cardDesc}><strong>Outlook:</strong> Settings → Calendar → Shared calendars → "Publish a calendar" → select ICS format → copy the link.</p>
           </div>
 
         </div>

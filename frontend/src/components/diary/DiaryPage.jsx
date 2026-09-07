@@ -10,6 +10,7 @@ import { getDatesWithEntries, getEntriesForDate, createEntry, deleteEntry } from
 import { getEntries as getTimeEntries, getProjects as getTimeProjects, fmtHours, fmtDuration } from '../../api_time'
 import DiaryEntryCard from './DiaryEntryCard'
 import HabitChecklist from './HabitChecklist'
+import CalendarEvents from './CalendarEvents'
 import OnThisDay from './OnThisDay'
 import DiaryEditor from './DiaryEditor'
 import styles from './DiaryPage.module.css'
@@ -177,6 +178,9 @@ export default function DiaryPage() {
 
           {/* Habit checklist — below the date header, just above daily notes */}
           <HabitChecklist date={format(selectedDate, 'yyyy-MM-dd')} />
+
+          {/* Today's calendar events, synced from Google/Outlook .ics feeds */}
+          <CalendarEvents date={format(selectedDate, 'yyyy-MM-dd')} />
 
           {/* Multi-year recall — same date in previous years */}
           <OnThisDay date={format(selectedDate, 'yyyy-MM-dd')} onJump={(d) => setSelectedDate(parseISO(d))} />

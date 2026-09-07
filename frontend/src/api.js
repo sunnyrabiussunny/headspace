@@ -87,3 +87,10 @@ export const getOnThisDay       = (date) => api.get(`/diary/on-this-day/${date}`
 
 // ── Ask Your Diary ─────────────────────────────────────────────────────────
 export const askDiary           = (question) => api.post('/diary/ask', { question }).then(r => r.data)
+
+// ── Calendar Feeds (Google/Outlook .ics one-way sync) ──────────────────────
+export const listCalendarFeeds  = () => api.get('/calendar/feeds').then(r => r.data)
+export const createCalendarFeed = (data) => api.post('/calendar/feeds', data).then(r => r.data)
+export const syncCalendarFeed   = (id) => api.post(`/calendar/feeds/${id}/sync`).then(r => r.data)
+export const deleteCalendarFeed = (id) => api.delete(`/calendar/feeds/${id}`)
+export const getCalendarEvents  = (date) => api.get(`/calendar/events/${date}`).then(r => r.data)
