@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime, JSON, Boolean
+from sqlalchemy import Column, String, Text, DateTime, JSON, Boolean, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, timezone
 import uuid
@@ -23,6 +23,14 @@ class User(Base):
     is_admin      = Column(Boolean, default=False)
     created_at    = Column(DateTime, default=utcnow)
 
+    # Background auto-tag toggle (Settings → Automation)
+    auto_tag_enabled       = Column(Boolean, default=False)
+
+    # Telegram bot link (Settings → Telegram) — each user connects their own bot
+    telegram_bot_token     = Column(String, nullable=True)
+    telegram_chat_id       = Column(String, nullable=True)
+    telegram_last_update_id = Column(Integer, default=0)
+
 class DiaryEntry(Base):
     __tablename__ = "diary_entries"
 
@@ -33,13 +41,14 @@ class DiaryEntry(Base):
     tags        = Column(JSON, default=lambda: [])
     created_at  = Column(DateTime, default=utcnow)
     updated_at  = Column(DateTime, default=utcnow, onupdate=utcnow)
+    auto_tagged_at = Column(DateTime, nullable=True)   # last time the background auto-tagger processed this
 
 class KnowledgeObject(Base):
     __tablename__ = "knowledge_objects"
 
     id          = Column(String, primary_key=True, default=new_id)
     user_id     = Column(String, nullable=True, index=True)
-    type        = Column(String, nullable=False)   # PERSON, PLACE, IDEA, ORGANIZATION, MEDIA, PAGE
+    type        = Column(String, nullable=False)   # PERSON, PLACE, IDEA, ORGANIZATION, MEDIA, PAGE, RECORDING
     title       = Column(String, nullable=False)
     description = Column(Text, default="")
     notes       = Column(Text, default="")
@@ -47,6 +56,7 @@ class KnowledgeObject(Base):
     properties  = Column(JSON, default=lambda: {})
     created_at  = Column(DateTime, default=utcnow)
     updated_at  = Column(DateTime, default=utcnow, onupdate=utcnow)
+    auto_tagged_at = Column(DateTime, nullable=True)   # last time the background auto-tagger processed this
 
 class Mention(Base):
     __tablename__ = "mentions"

@@ -31,14 +31,23 @@ async def ensure_user_id_column(table: str):
     """SQLite ALTER TABLE ADD COLUMN migration — used for tables that existed
     before multi-user support was added, so old single-user databases keep
     working after upgrading."""
+    await ensure_column(table, "user_id", "VARCHAR")
+
+
+async def ensure_column(table: str, column: str, sqlite_type: str, default_sql: str | None = None):
+    """Generic SQLite ALTER TABLE ADD COLUMN migration for any table/column
+    that might already exist on a deployed database from before this column
+    was introduced. default_sql, if given, is a literal SQL default
+    (e.g. "0" or "'active'") — SQLite requires a constant, not an expression."""
     async with engine.begin() as conn:
         has_table = await conn.run_sync(
             lambda sync_conn: sync_conn.dialect.has_table(sync_conn, table)
         )
         if not has_table:
             return
-        if not await _table_has_column(conn, table, "user_id"):
-            await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN user_id VARCHAR"))
+        if not await _table_has_column(conn, table, column):
+            default_clause = f" DEFAULT {default_sql}" if default_sql is not None else ""
+            await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sqlite_type}{default_clause}"))
 
 
 async def backfill_owner(table: str, owner_id: str):

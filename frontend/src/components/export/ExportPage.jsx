@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { getExportStatus, runBackup, downloadBackup, importBackup, importCapacities, deleteAllData,
-         listCalendarFeeds, createCalendarFeed, syncCalendarFeed, deleteCalendarFeed } from '../../api'
+         listCalendarFeeds, createCalendarFeed, syncCalendarFeed, deleteCalendarFeed,
+         getSettings, setAutoTagEnabled, connectTelegram, disconnectTelegram } from '../../api'
 import { listUsers, createUser, changePassword } from '../../api_auth'
 import toast from 'react-hot-toast'
 import styles from './ExportPage.module.css'
@@ -16,6 +17,52 @@ export default function ExportPage({ user }) {
   const [deleteAllInput, setDeleteAllInput] = useState('')
   const fileRef    = useRef(null)
   const capFileRef = useRef(null)
+
+  // ── Automation tab state (auto-tag + Telegram) ──
+  const [settings, setSettings] = useState(null)
+  const [savingAutoTag, setSavingAutoTag] = useState(false)
+  const [botToken, setBotToken] = useState('')
+  const [connectingBot, setConnectingBot] = useState(false)
+
+  useEffect(() => {
+    if (settingsTab === 'automation') {
+      getSettings().then(setSettings).catch(() => {})
+    }
+  }, [settingsTab])
+
+  const handleToggleAutoTag = async () => {
+    setSavingAutoTag(true)
+    try {
+      const next = !settings.auto_tag_enabled
+      await setAutoTagEnabled(next)
+      setSettings(s => ({ ...s, auto_tag_enabled: next }))
+      toast.success(next ? 'Auto-tag automation turned on' : 'Auto-tag automation turned off')
+    } catch { toast.error('Failed to update') }
+    finally { setSavingAutoTag(false) }
+  }
+
+  const handleConnectTelegram = async (e) => {
+    e.preventDefault()
+    if (!botToken.trim()) { toast.error('Paste your bot token first'); return }
+    setConnectingBot(true)
+    try {
+      const res = await connectTelegram(botToken.trim())
+      setSettings(s => ({ ...s, telegram_connected: true, telegram_linked: false }))
+      setBotToken('')
+      toast.success(`Connected to @${res.bot_username} — now send it any message to link your chat`)
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Invalid bot token')
+    } finally { setConnectingBot(false) }
+  }
+
+  const handleDisconnectTelegram = async () => {
+    if (!window.confirm('Disconnect this Telegram bot? Messages will stop being added to your diary.')) return
+    try {
+      await disconnectTelegram()
+      setSettings(s => ({ ...s, telegram_connected: false, telegram_linked: false }))
+      toast.success('Telegram disconnected')
+    } catch { toast.error('Failed to disconnect') }
+  }
 
   // ── Calendars tab state ──
   const [feeds, setFeeds] = useState([])
@@ -176,6 +223,7 @@ export default function ExportPage({ user }) {
 
   const TABS = [
     { id: 'account', label: '👤 Account' },
+    { id: 'automation', label: '🤖 Automation' },
     { id: 'calendars', label: '📅 Calendars' },
     { id: 'backup', label: '💾 Backup & Import' },
     { id: 'danger', label: '⚠️ Data Management' },
@@ -286,6 +334,76 @@ export default function ExportPage({ user }) {
                 </div>
               ))}
             </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* ── Automation tab ── */}
+      {settingsTab === 'automation' && (
+        <div className={styles.tabContent}>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Auto-tag Automatically</div>
+            <p className={styles.cardDesc}>
+              When on, anything you write — diary entries, object notes, Recordings — gets scanned
+              5 minutes after you stop editing it, and any plain-text mentions of objects that already
+              exist get linked automatically, exactly like the manual 🏷️ Auto-tag button. It never creates
+              new objects. When off, tagging only happens when you press the button yourself.
+              Calendar events are always auto-tagged live — no toggle needed for those.
+            </p>
+            {settings && (
+              <button
+                className={`${styles.toggleSwitch} ${settings.auto_tag_enabled ? styles.toggleOn : ''}`}
+                onClick={handleToggleAutoTag}
+                disabled={savingAutoTag}
+              >
+                <span className={styles.toggleKnob} />
+              </button>
+            )}
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Telegram Bot</div>
+            <p className={styles.cardDesc}>
+              Text a private Telegram bot and it shows up as a timestamped diary entry — handy for
+              quick notes on the go. Each account connects its own bot, so your messages only ever
+              reach your own diary.
+            </p>
+
+            {!settings?.telegram_connected && (
+              <>
+                <ol className={styles.steps}>
+                  <li>In Telegram, message <strong>@BotFather</strong> and send <code>/newbot</code>.</li>
+                  <li>Follow the prompts to name your bot — BotFather gives you a token like <code>123456:ABC-def...</code>.</li>
+                  <li>Paste that token below.</li>
+                </ol>
+                <form onSubmit={handleConnectTelegram} style={{ display:'flex', gap:8 }}>
+                  <input
+                    className={styles.confirmInput}
+                    placeholder="Paste bot token from BotFather"
+                    value={botToken}
+                    onChange={e => setBotToken(e.target.value)}
+                  />
+                  <button className="btn btn-primary" type="submit" disabled={connectingBot}>
+                    {connectingBot ? 'Connecting…' : 'Connect'}
+                  </button>
+                </form>
+              </>
+            )}
+
+            {settings?.telegram_connected && (
+              <>
+                <p className={styles.cardDesc}>
+                  {settings.telegram_linked
+                    ? '✅ Bot connected and linked to your Telegram chat. Send it a message any time.'
+                    : '⏳ Bot connected — now open Telegram and send your bot any message (even just "hi") to finish linking.'}
+                </p>
+                <div className={styles.btnRow}>
+                  <button className="btn btn-secondary" onClick={handleDisconnectTelegram}>Disconnect</button>
+                </div>
+              </>
+            )}
           </div>
 
         </div>

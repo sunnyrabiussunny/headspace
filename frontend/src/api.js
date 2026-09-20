@@ -94,3 +94,9 @@ export const createCalendarFeed = (data) => api.post('/calendar/feeds', data).th
 export const syncCalendarFeed   = (id) => api.post(`/calendar/feeds/${id}/sync`).then(r => r.data)
 export const deleteCalendarFeed = (id) => api.delete(`/calendar/feeds/${id}`)
 export const getCalendarEvents  = (date) => api.get(`/calendar/events/${date}`).then(r => r.data)
+
+// ── Settings: Auto-tag automation + Telegram bot ────────────────────────────
+export const getSettings        = () => api.get('/settings').then(r => r.data)
+export const setAutoTagEnabled  = (enabled) => api.put('/settings/auto-tag', { enabled }).then(r => r.data)
+export const connectTelegram    = (bot_token) => api.post('/settings/telegram', { bot_token }).then(r => r.data)
+export const disconnectTelegram = () => api.delete('/settings/telegram')

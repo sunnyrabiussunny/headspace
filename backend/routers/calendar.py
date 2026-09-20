@@ -12,8 +12,9 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 from database import get_db, engine, AsyncSessionLocal
-from models.db_models import Base, User
+from models.db_models import Base, User, KnowledgeObject
 from auth import get_current_user
+from utils.mentions import auto_tag_content
 
 router = APIRouter(prefix="/api/calendar", tags=["calendar"])
 
@@ -45,6 +46,7 @@ class CalendarEvent(Base):
     uid         = Column(String, nullable=False)     # ics UID + occurrence start, for dedup
     title       = Column(String, nullable=False, default="(untitled event)")
     location    = Column(String, nullable=True)
+    description = Column(String, nullable=True)
     start_time  = Column(DateTime, nullable=False, index=True)
     end_time    = Column(DateTime, nullable=True)
     all_day     = Column(Boolean, default=False)
@@ -129,10 +131,11 @@ async def sync_feed(db: AsyncSession, feed: CalendarFeed) -> None:
         occurrence_uid = f"{base_uid}:{start_dt.isoformat()}"
         title = str(occ.get('SUMMARY', '(untitled event)'))
         location = str(occ.get('LOCATION')) if occ.get('LOCATION') else None
+        description = str(occ.get('DESCRIPTION')) if occ.get('DESCRIPTION') else None
 
         db.add(CalendarEvent(
             id=str(uuid.uuid4()), user_id=feed.user_id, feed_id=feed.id,
-            uid=occurrence_uid, title=title, location=location,
+            uid=occurrence_uid, title=title, location=location, description=description,
             start_time=start_dt, end_time=end_dt, all_day=all_day,
         ))
 
@@ -234,11 +237,29 @@ async def get_events_for_date(date: str, current_user: User = Depends(get_curren
         ).order_by(CalendarEvent.all_day.desc(), CalendarEvent.start_time)
     )
     events = r.scalars().all()
-    return [{
-        "id": e.id, "title": e.title, "location": e.location,
-        "start_time": e.start_time.isoformat() + "Z",
-        "end_time": e.end_time.isoformat() + "Z" if e.end_time else None,
-        "all_day": e.all_day,
-        "feed_name": feed_colors.get(e.feed_id, {}).get("name", "Calendar"),
-        "feed_color": feed_colors.get(e.feed_id, {}).get("color", "#4285f4"),
-    } for e in events]
+
+    # Auto-tag calendar text at read time (never persisted) — the sync loop
+    # fully replaces event rows every 30 minutes from the source calendar,
+    # so writing @[Name](id) into the stored title/description would just
+    # get overwritten on the next sync. Computing it fresh on every read
+    # avoids that entirely and always reflects your current objects.
+    objs_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.user_id == current_user.id))
+    objects = objs_result.scalars().all()
+
+    out = []
+    for e in events:
+        title_tagged, _ = auto_tag_content(e.title, objects)
+        desc_tagged = None
+        if e.description:
+            desc_tagged, _ = auto_tag_content(e.description, objects)
+        out.append({
+            "id": e.id, "title": e.title, "title_tagged": title_tagged,
+            "description": e.description, "description_tagged": desc_tagged,
+            "location": e.location,
+            "start_time": e.start_time.isoformat() + "Z",
+            "end_time": e.end_time.isoformat() + "Z" if e.end_time else None,
+            "all_day": e.all_day,
+            "feed_name": feed_colors.get(e.feed_id, {}).get("name", "Calendar"),
+            "feed_color": feed_colors.get(e.feed_id, {}).get("color", "#4285f4"),
+        })
+    return out

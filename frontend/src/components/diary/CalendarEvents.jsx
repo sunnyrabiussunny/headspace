@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getCalendarEvents } from '../../api'
+import { renderRichContent } from './renderRichContent'
 import styles from './CalendarEvents.module.css'
 
 function fmtTime(iso) {
@@ -10,6 +12,7 @@ function fmtTime(iso) {
 export default function CalendarEvents({ date }) {
   const [events, setEvents]   = useState([])
   const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
 
   useEffect(() => {
     setLoading(true)
@@ -26,7 +29,9 @@ export default function CalendarEvents({ date }) {
           <span className={styles.time}>
             {e.all_day ? 'All day' : fmtTime(e.start_time)}
           </span>
-          <span className={styles.title}>{e.title}</span>
+          <span className={styles.title}>
+            {renderRichContent(e.title_tagged || e.title, { navigate }) || e.title}
+          </span>
           {e.location && <span className={styles.location}>📍 {e.location}</span>}
         </div>
       ))}
