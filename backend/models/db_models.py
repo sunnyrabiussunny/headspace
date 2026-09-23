@@ -26,6 +26,9 @@ class User(Base):
     # Background auto-tag toggle (Settings → Automation)
     auto_tag_enabled       = Column(Boolean, default=False)
 
+    # Background automatic task creation toggle (Settings → Automation)
+    auto_task_enabled      = Column(Boolean, default=False)
+
     # Telegram bot link (Settings → Telegram) — each user connects their own bot
     telegram_bot_token     = Column(String, nullable=True)
     telegram_chat_id       = Column(String, nullable=True)
@@ -42,6 +45,7 @@ class DiaryEntry(Base):
     created_at  = Column(DateTime, default=utcnow)
     updated_at  = Column(DateTime, default=utcnow, onupdate=utcnow)
     auto_tagged_at = Column(DateTime, nullable=True)   # last time the background auto-tagger processed this
+    task_scanned_at = Column(DateTime, nullable=True)  # once set, automatic task-scanning skips this entry forever (force-rescan via button resets it)
 
 class KnowledgeObject(Base):
     __tablename__ = "knowledge_objects"

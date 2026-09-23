@@ -92,3 +92,82 @@ async def ask_ollama(question: str, context_entries: list) -> str:
         return f"Ollama returned an error ({e.response.status_code}). Is the model '{OLLAMA_MODEL}' pulled?"
     except Exception as e:
         return f"Something went wrong asking Ollama: {e or repr(e)}"
+
+
+TASK_EXTRACTION_PROMPT = """You extract action items (tasks) the writer intends to do, from a personal diary entry.
+
+Rules:
+- Only extract things the writer explicitly says they need to, plan to, intend to, should, must, or are going to do — not things they already did, and not general observations or feelings.
+- Rewrite each as a short imperative task title (a command, not a full sentence): drop lead-in phrases like "I need to", "I am planning to", "I should", "I will", "I'm going to", and capitalize the first letter.
+  Example: "I need to Contact XYZ" -> "Contact XYZ"
+  Example: "I am planning to create a new app ghij" -> "Create a new app ghij"
+- If there are no clear action items, return an empty list.
+- Respond with ONLY a JSON array of strings, nothing else. No explanation, no markdown fences.
+
+Diary entry:
+\"\"\"
+{content}
+\"\"\"
+
+JSON array of task titles:"""
+
+
+async def extract_tasks(content: str) -> list[str]:
+    """Returns a list of task-title strings extracted from a diary entry via
+    the local Ollama model, or [] if none found / on any failure (callers
+    treat a failure the same as 'no tasks found' — this is a best-effort
+    background feature, never something that should surface an error to
+    the user mid-typing)."""
+    if not content or not content.strip():
+        return []
+
+    prompt = TASK_EXTRACTION_PROMPT.format(content=content.strip()[:4000])
+
+    try:
+        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+            resp = await client.post(
+                f"{OLLAMA_URL}/api/generate",
+                json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False, "format": "json"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            raw = (data.get("response") or "").strip()
+            return _parse_task_list(raw)
+    except Exception:
+        return []
+
+
+def _parse_task_list(raw: str) -> list[str]:
+    import json as _json
+    import re as _re
+    try:
+        parsed = _json.loads(raw)
+    except Exception:
+        # Ollama occasionally wraps the array in stray text even with format=json;
+        # fall back to grabbing the first [...] block.
+        m = _re.search(r'\[.*\]', raw, _re.DOTALL)
+        if not m:
+            return []
+        try:
+            parsed = _json.loads(m.group(0))
+        except Exception:
+            return []
+
+    if isinstance(parsed, dict):
+        # Some models wrap it as {"tasks": [...]} despite instructions — handle gracefully.
+        for v in parsed.values():
+            if isinstance(v, list):
+                parsed = v
+                break
+        else:
+            return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    titles = []
+    for item in parsed:
+        title = str(item).strip()
+        if title and len(title) <= 200:
+            titles.append(title)
+    return titles

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { format, parseISO } from 'date-fns'
-import { updateEntry, mentionSearch, createObject, searchTags, autoTagEntry, listObjectTypes } from '../../api'
+import { updateEntry, mentionSearch, createObject, searchTags, autoTagEntry, listObjectTypes, scanEntryForTasks } from '../../api'
 import toast from 'react-hot-toast'
 import styles from './DiaryEditor.module.css'
 
@@ -91,6 +91,23 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
   const tagAnchorRef = useRef(-1)
   const [popupTop,   setPopupTop]   = useState(null)  // px from top of .body
   const [autoTagging, setAutoTagging] = useState(false)
+  const [scanningTasks, setScanningTasks] = useState(false)
+
+  const handleCreateTasks = async () => {
+    setScanningTasks(true)
+    try {
+      const res = await scanEntryForTasks(entry.id)
+      if (res.tasks_created?.length) {
+        toast.success(`Created: ${res.tasks_created.join(', ')}`)
+      } else {
+        toast('No new tasks found in this entry', { icon: '📝' })
+      }
+    } catch {
+      toast.error('Task scan failed')
+    } finally {
+      setScanningTasks(false)
+    }
+  }
 
   const handleAutoTag = async () => {
     setAutoTagging(true)
@@ -392,6 +409,14 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
             title="Find and link mentions of objects that already exist — never creates new ones"
           >
             🏷️ {autoTagging ? 'Tagging…' : 'Auto-tag'}
+          </button>
+          <button
+            className={styles.toolBtn}
+            onClick={handleCreateTasks}
+            disabled={scanningTasks}
+            title="Scan this entry for task-like sentences (e.g. 'I need to...') and create tasks from them"
+          >
+            ✅ {scanningTasks ? 'Scanning…' : 'Create Task'}
           </button>
         </div>
         <button className={styles.delBtn} onClick={onDelete}><TrashIcon /></button>

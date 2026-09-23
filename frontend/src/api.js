@@ -100,3 +100,12 @@ export const getSettings        = () => api.get('/settings').then(r => r.data)
 export const setAutoTagEnabled  = (enabled) => api.put('/settings/auto-tag', { enabled }).then(r => r.data)
 export const connectTelegram    = (bot_token) => api.post('/settings/telegram', { bot_token }).then(r => r.data)
 export const disconnectTelegram = () => api.delete('/settings/telegram')
+export const setAutoTaskEnabled = (enabled) => api.put('/settings/auto-task', { enabled }).then(r => r.data)
+
+// ── Tasks ────────────────────────────────────────────────────────────────
+export const listTasks          = () => api.get('/tasks').then(r => r.data)
+export const listActiveTasks    = (date) => api.get(`/tasks/active/${date}`).then(r => r.data)
+export const createTask         = (title) => api.post('/tasks', { title }).then(r => r.data)
+export const updateTask         = (id, data) => api.put(`/tasks/${id}`, data).then(r => r.data)
+export const deleteTask         = (id) => api.delete(`/tasks/${id}`)
+export const scanEntryForTasks  = (entryId) => api.post(`/diary/${entryId}/scan-tasks`).then(r => r.data)

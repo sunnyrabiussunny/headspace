@@ -13,6 +13,9 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 class AutoTagUpdate(BaseModel):
     enabled: bool
 
+class AutoTaskUpdate(BaseModel):
+    enabled: bool
+
 class TelegramConnect(BaseModel):
     bot_token: str
 
@@ -21,6 +24,7 @@ class TelegramConnect(BaseModel):
 async def get_settings(current_user: User = Depends(get_current_user)):
     return {
         "auto_tag_enabled": current_user.auto_tag_enabled,
+        "auto_task_enabled": current_user.auto_task_enabled,
         "telegram_connected": bool(current_user.telegram_bot_token),
         "telegram_linked": bool(current_user.telegram_chat_id),
     }
@@ -31,6 +35,13 @@ async def set_auto_tag(payload: AutoTagUpdate, current_user: User = Depends(get_
     current_user.auto_tag_enabled = payload.enabled
     await db.commit()
     return {"auto_tag_enabled": current_user.auto_tag_enabled}
+
+
+@router.put("/auto-task")
+async def set_auto_task(payload: AutoTaskUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    current_user.auto_task_enabled = payload.enabled
+    await db.commit()
+    return {"auto_task_enabled": current_user.auto_task_enabled}
 
 
 @router.post("/telegram")

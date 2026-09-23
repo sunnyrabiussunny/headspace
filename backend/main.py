@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import select
 
 from database import init_db, ensure_user_id_column, ensure_column, backfill_owner, AsyncSessionLocal
-from routers import diary, objects, search, export, tags, time, habits, board, auth_router, object_types, calendar, settings_router
+from routers import diary, objects, search, export, tags, time, habits, board, auth_router, object_types, calendar, settings_router, tasks
 from models.db_models import User
 from auth import hash_password
 
@@ -24,10 +24,12 @@ LEGACY_TABLES = [
 # each needs an ALTER TABLE migration for databases deployed before it existed.
 NEW_COLUMNS = [
     ("users", "auto_tag_enabled", "BOOLEAN", "0"),
+    ("users", "auto_task_enabled", "BOOLEAN", "0"),
     ("users", "telegram_bot_token", "VARCHAR", None),
     ("users", "telegram_chat_id", "VARCHAR", None),
     ("users", "telegram_last_update_id", "INTEGER", "0"),
     ("diary_entries", "auto_tagged_at", "DATETIME", None),
+    ("diary_entries", "task_scanned_at", "DATETIME", None),
     ("knowledge_objects", "auto_tagged_at", "DATETIME", None),
     ("calendar_events", "description", "VARCHAR", None),
 ]
@@ -85,16 +87,20 @@ async def lifespan(app: FastAPI):
     await init_object_type_tables()
     from routers.calendar import init_calendar_tables, calendar_sync_loop
     await init_calendar_tables()
+    from routers.tasks import init_task_tables
+    await init_task_tables()
     await _bootstrap_admin_and_migrate()
 
-    from utils.background_loops import auto_tag_background_loop, telegram_poll_loop
+    from utils.background_loops import auto_tag_background_loop, telegram_poll_loop, task_scan_background_loop
     sync_task = asyncio.create_task(calendar_sync_loop())
     auto_tag_task = asyncio.create_task(auto_tag_background_loop())
     telegram_task = asyncio.create_task(telegram_poll_loop())
+    task_scan_task = asyncio.create_task(task_scan_background_loop())
     yield
     sync_task.cancel()
     auto_tag_task.cancel()
     telegram_task.cancel()
+    task_scan_task.cancel()
 
 
 app = FastAPI(title="Headspace API", version="1.0.0", lifespan=lifespan)
@@ -119,6 +125,7 @@ app.include_router(board.router)
 app.include_router(object_types.router)
 app.include_router(calendar.router)
 app.include_router(settings_router.router)
+app.include_router(tasks.router)
 
 
 @app.get("/api/health")

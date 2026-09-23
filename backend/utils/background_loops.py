@@ -5,11 +5,16 @@ from sqlalchemy import select
 
 from database import AsyncSessionLocal
 from models.db_models import User, DiaryEntry, KnowledgeObject
-from utils.mentions import auto_tag_content
+from utils.mentions import auto_tag_content, strip_mentions
 from utils.telegram_client import get_updates, send_message
+from utils.ollama_client import extract_tasks
 
 AUTO_TAG_LOOP_INTERVAL = 60          # check every minute
 AUTO_TAG_DELAY_MINUTES = 5           # only tag content that's been untouched for this long
+
+TASK_SCAN_LOOP_INTERVAL = 60         # check every minute
+TASK_SCAN_DELAY_MINUTES = 5          # only scan content that's been untouched for this long
+TASK_SCAN_MAX_PER_PASS = 5           # throttle: don't flood Ollama if a backlog of old unscanned entries exists
 
 TELEGRAM_LOOP_INTERVAL = 15          # poll every 15 seconds
 
@@ -68,6 +73,50 @@ async def auto_tag_background_loop():
         except Exception:
             pass   # never let one bad record kill the loop
         await asyncio.sleep(AUTO_TAG_LOOP_INTERVAL)
+
+
+async def run_task_scan_pass():
+    """One pass of automatic task detection — finds diary entries edited
+    more than 5 minutes ago that have NEVER been scanned before
+    (task_scanned_at is NULL), and runs them through Ollama once. Unlike
+    auto-tag, this never re-scans an entry just because it was edited
+    again — once scanned, only the manual 'Create Task from this entry'
+    button will scan it again."""
+    import uuid as _uuid
+    from routers.tasks import Task
+
+    async with AsyncSessionLocal() as db:
+        users_result = await db.execute(select(User).where(User.auto_task_enabled == True))
+        users = users_result.scalars().all()
+        cutoff = datetime.utcnow() - timedelta(minutes=TASK_SCAN_DELAY_MINUTES)
+
+        for user in users:
+            entries_result = await db.execute(
+                select(DiaryEntry).where(
+                    DiaryEntry.user_id == user.id,
+                    DiaryEntry.task_scanned_at == None,
+                    DiaryEntry.updated_at <= cutoff,
+                ).order_by(DiaryEntry.updated_at.desc()).limit(TASK_SCAN_MAX_PER_PASS)
+            )
+            for entry in entries_result.scalars().all():
+                titles = await extract_tasks(strip_mentions(entry.content))
+                for title in titles:
+                    db.add(Task(
+                        id=str(_uuid.uuid4()), user_id=user.id, title=title,
+                        source_entry_id=entry.id, source_date=entry.date,
+                    ))
+                entry.task_scanned_at = datetime.utcnow()
+                await db.commit()
+
+
+async def task_scan_background_loop():
+    """Runs run_task_scan_pass() every minute for the lifetime of the app."""
+    while True:
+        try:
+            await run_task_scan_pass()
+        except Exception:
+            pass   # never let one bad record kill the loop
+        await asyncio.sleep(TASK_SCAN_LOOP_INTERVAL)
 
 
 async def telegram_poll_loop():

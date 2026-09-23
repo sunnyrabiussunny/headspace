@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { getExportStatus, runBackup, downloadBackup, importBackup, importCapacities, deleteAllData,
          listCalendarFeeds, createCalendarFeed, syncCalendarFeed, deleteCalendarFeed,
-         getSettings, setAutoTagEnabled, connectTelegram, disconnectTelegram } from '../../api'
+         getSettings, setAutoTagEnabled, setAutoTaskEnabled, connectTelegram, disconnectTelegram } from '../../api'
 import { listUsers, createUser, changePassword } from '../../api_auth'
 import toast from 'react-hot-toast'
 import styles from './ExportPage.module.css'
@@ -39,6 +39,18 @@ export default function ExportPage({ user }) {
       toast.success(next ? 'Auto-tag automation turned on' : 'Auto-tag automation turned off')
     } catch { toast.error('Failed to update') }
     finally { setSavingAutoTag(false) }
+  }
+
+  const [savingAutoTask, setSavingAutoTask] = useState(false)
+  const handleToggleAutoTask = async () => {
+    setSavingAutoTask(true)
+    try {
+      const next = !settings.auto_task_enabled
+      await setAutoTaskEnabled(next)
+      setSettings(s => ({ ...s, auto_task_enabled: next }))
+      toast.success(next ? 'Automatic task creation turned on' : 'Automatic task creation turned off')
+    } catch { toast.error('Failed to update') }
+    finally { setSavingAutoTask(false) }
   }
 
   const handleConnectTelegram = async (e) => {
@@ -357,6 +369,26 @@ export default function ExportPage({ user }) {
                 className={`${styles.toggleSwitch} ${settings.auto_tag_enabled ? styles.toggleOn : ''}`}
                 onClick={handleToggleAutoTag}
                 disabled={savingAutoTag}
+              >
+                <span className={styles.toggleKnob} />
+              </button>
+            )}
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Automatic Task Creation</div>
+            <p className={styles.cardDesc}>
+              When on, diary entries are scanned once (5 minutes after you stop editing) by your local
+              Ollama model for sentences like "I need to…" or "I'm planning to…", and each one becomes
+              a task on the Tasks tab, rewritten as a short title — e.g. "I need to Contact XYZ" →
+              "Contact XYZ". Once an entry has been scanned, it won't be scanned again automatically,
+              even if you edit it later — use the ✅ Create Task button on that entry to force a rescan.
+            </p>
+            {settings && (
+              <button
+                className={`${styles.toggleSwitch} ${settings.auto_task_enabled ? styles.toggleOn : ''}`}
+                onClick={handleToggleAutoTask}
+                disabled={savingAutoTask}
               >
                 <span className={styles.toggleKnob} />
               </button>

@@ -12,6 +12,7 @@ import DiaryEntryCard from './DiaryEntryCard'
 import HabitChecklist from './HabitChecklist'
 import CalendarEvents from './CalendarEvents'
 import OnThisDay from './OnThisDay'
+import PendingTasks from './PendingTasks'
 import DiaryEditor from './DiaryEditor'
 import styles from './DiaryPage.module.css'
 
@@ -239,6 +240,9 @@ export default function DiaryPage() {
               <PlusIcon /> Daily Note
             </button>
           </div>
+
+          {/* Pending tasks — undone tasks carry forward until checked off */}
+          <PendingTasks date={format(selectedDate, 'yyyy-MM-dd')} />
 
           {/* ── Day timelog section ── */}
           {dayTimeEntries.length > 0 && (() => {

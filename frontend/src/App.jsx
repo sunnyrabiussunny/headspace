@@ -13,6 +13,7 @@ import AskDiaryModal from './components/AskDiaryModal'
 import logoImg from './assets/logo.png'
 import TimePage from './components/time/TimePage'
 import BoardPage from './components/board/BoardPage'
+import TasksPage from './components/tasks/TasksPage'
 import { getToken, getStoredUser, logout } from './auth'
 import { me as fetchMe } from './api_auth'
 import styles from './App.module.css'
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { to: '/all',     label: 'Entries',  icon: ListIcon },
   { to: '/objects', label: 'Objects',  icon: LayersIcon },
   { to: '/tags',    label: 'Tags',     icon: TagIcon },
+  { to: '/tasks',    label: 'Tasks',    icon: TaskIcon },
   { to: '/board',    label: 'Board',    icon: BoardIcon },
   { to: '/timer',    label: 'Timer',    icon: ClockIcon },
   { to: '/export',  label: 'Settings', icon: SettingsIcon },
@@ -29,7 +31,10 @@ const NAV_ITEMS = [
 
 export default function App() {
   const [user, setUser] = useState(() => getStoredUser())
-  const [checking, setChecking] = useState(!!getToken())
+  // Only block on a check if we have a token but no cached user yet (e.g. a
+  // fresh login flow) — a returning visit already has a cached user, so it
+  // renders immediately and validates the session quietly in the background.
+  const [checking, setChecking] = useState(!!getToken() && !getStoredUser())
 
   useEffect(() => {
     if (!getToken()) { setChecking(false); return }
@@ -39,7 +44,13 @@ export default function App() {
       .finally(() => setChecking(false))
   }, [])
 
-  if (checking) return null   // brief silent check on first load; avoids a login-page flash for valid sessions
+  if (checking) {
+    return (
+      <div style={{ height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#0d0d0d' }}>
+        <img src={logoImg} alt="" style={{ width:40, height:40, borderRadius:10, opacity:0.6 }} />
+      </div>
+    )
+  }
 
   if (!user) {
     return <LoginPage onLoggedIn={setUser} />
@@ -118,6 +129,7 @@ function AppShell({ user }) {
 
             <Route path="/timer"             element={<TimePage />} />
             <Route path="/board"             element={<BoardPage />} />
+            <Route path="/tasks"             element={<TasksPage />} />
             <Route path="/guide"            element={<Navigate to="/export" replace />} />
           </Routes>
         </main>
@@ -178,5 +190,6 @@ function SunIcon()  { return <svg width="18" height="18" viewBox="0 0 24 24" fil
 function MoonIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> }
 function ClockIcon({ size=20 })    { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> }
 function BoardIcon({ size=20 })    { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg> }
+function TaskIcon({ size=20 })     { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="8 12 11 15 16 9"/></svg> }
 function DownloadIcon({ size=20 }) { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> }
 function LogoutIcon({ size=20 })   { return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> }

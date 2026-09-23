@@ -11,7 +11,7 @@ from models.db_models import DiaryEntry, Mention, User
 from models.schemas import DiaryEntryCreate, DiaryEntryUpdate, DiaryEntryOut
 from utils.mentions import extract_mentions, auto_tag_content
 from utils.mentions import strip_mentions
-from utils.ollama_client import retrieve_relevant_entries, ask_ollama
+from utils.ollama_client import retrieve_relevant_entries, ask_ollama, extract_tasks
 from auth import get_current_user
 
 router = APIRouter(prefix="/api/diary", tags=["diary"])
@@ -200,6 +200,42 @@ async def auto_tag_entry(entry_id: str, current_user: User = Depends(get_current
     await db.refresh(entry)
     await _sync_mentions(db, entry, current_user.id)
     return entry
+
+
+@router.post("/{entry_id}/scan-tasks")
+async def scan_entry_for_tasks(entry_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """'Create Task from this entry' — forces a fresh Ollama scan for task-like
+    sentences, regardless of whether this entry was already auto-scanned
+    before (the automatic background scan only ever runs once per entry;
+    this button is the manual override to run it again, e.g. after editing)."""
+    from routers.tasks import Task
+    from utils.mentions import strip_mentions as _strip
+
+    result = await db.execute(select(DiaryEntry).where(DiaryEntry.id == entry_id, DiaryEntry.user_id == current_user.id))
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise HTTPException(404, "Entry not found")
+
+    titles = await extract_tasks(_strip(entry.content))
+
+    existing_r = await db.execute(select(Task.title).where(Task.source_entry_id == entry_id, Task.user_id == current_user.id))
+    existing_titles = {t.lower() for t in existing_r.scalars().all()}
+
+    created = []
+    for title in titles:
+        if title.lower() in existing_titles:
+            continue   # already created from this entry on a previous scan — don't duplicate
+        task = Task(
+            id=str(uuid.uuid4()), user_id=current_user.id, title=title,
+            source_entry_id=entry_id, source_date=entry.date,
+        )
+        db.add(task)
+        created.append(title)
+        existing_titles.add(title.lower())
+
+    entry.task_scanned_at = datetime.utcnow()
+    await db.commit()
+    return {"status": "ok", "tasks_created": created}
 
 
 async def _sync_mentions(db: AsyncSession, entry: DiaryEntry, user_id: str):
