@@ -102,8 +102,8 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
       } else {
         toast('No new tasks found in this entry', { icon: '📝' })
       }
-    } catch {
-      toast.error('Task scan failed')
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Task scan failed')
     } finally {
       setScanningTasks(false)
     }

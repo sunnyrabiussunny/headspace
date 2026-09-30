@@ -216,7 +216,9 @@ async def scan_entry_for_tasks(entry_id: str, current_user: User = Depends(get_c
     if not entry:
         raise HTTPException(404, "Entry not found")
 
-    titles = await extract_tasks(_strip(entry.content))
+    titles, error = await extract_tasks(_strip(entry.content))
+    if error:
+        raise HTTPException(502, error)
 
     existing_r = await db.execute(select(Task.title).where(Task.source_entry_id == entry_id, Task.user_id == current_user.id))
     existing_titles = {t.lower() for t in existing_r.scalars().all()}

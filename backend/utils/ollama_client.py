@@ -101,6 +101,8 @@ Rules:
 - Rewrite each as a short imperative task title (a command, not a full sentence): drop lead-in phrases like "I need to", "I am planning to", "I should", "I will", "I'm going to", and capitalize the first letter.
   Example: "I need to Contact XYZ" -> "Contact XYZ"
   Example: "I am planning to create a new app ghij" -> "Create a new app ghij"
+  Example: "I need to do something about the leak" -> "Do something about the leak"
+- Extract even when the action is vague or generic (e.g. "I need to do something") — don't skip it just because it isn't a specific, concrete action. If the writer stated an intent, extract it as written; do not judge how useful or specific it is.
 - If there are no clear action items, return an empty list.
 - Respond with ONLY a JSON array of strings, nothing else. No explanation, no markdown fences.
 
@@ -112,14 +114,14 @@ Diary entry:
 JSON array of task titles:"""
 
 
-async def extract_tasks(content: str) -> list[str]:
-    """Returns a list of task-title strings extracted from a diary entry via
-    the local Ollama model, or [] if none found / on any failure (callers
-    treat a failure the same as 'no tasks found' — this is a best-effort
-    background feature, never something that should surface an error to
-    the user mid-typing)."""
+async def extract_tasks(content: str) -> tuple[list[str], str | None]:
+    """Returns (titles, error). error is None when the call succeeded —
+    including when the model legitimately found zero tasks, which is a
+    real decision, not a failure. error is set only for connectivity/HTTP
+    problems or genuinely unparseable output, so callers can tell 'nothing
+    to extract' apart from 'something is actually broken'."""
     if not content or not content.strip():
-        return []
+        return [], None
 
     prompt = TASK_EXTRACTION_PROMPT.format(content=content.strip()[:4000])
 
@@ -131,13 +133,23 @@ async def extract_tasks(content: str) -> list[str]:
             )
             resp.raise_for_status()
             data = resp.json()
-            raw = (data.get("response") or "").strip()
-            return _parse_task_list(raw)
-    except Exception:
-        return []
+    except httpx.RequestError as e:
+        return [], f"Couldn't reach Ollama at {OLLAMA_URL} ({type(e).__name__}). Check OLLAMA_URL in docker-compose.yml."
+    except httpx.HTTPStatusError as e:
+        return [], f"Ollama returned an error ({e.response.status_code}). Is the model '{OLLAMA_MODEL}' pulled?"
+    except Exception as e:
+        return [], f"Unexpected error calling Ollama: {e or repr(e)}"
+
+    raw = (data.get("response") or "").strip()
+    titles, parse_ok = _parse_task_list(raw)
+    if not parse_ok:
+        print(f"[task-extraction] Could not parse a task list from model output. Raw response was: {raw!r}")
+        return [], f"Model '{OLLAMA_MODEL}' didn't return a parseable list (see backend logs for its raw reply)."
+    return titles, None
 
 
-def _parse_task_list(raw: str) -> list[str]:
+def _parse_task_list(raw: str) -> tuple[list[str], bool]:
+    """Returns (titles, parsed_successfully)."""
     import json as _json
     import re as _re
     try:
@@ -147,11 +159,11 @@ def _parse_task_list(raw: str) -> list[str]:
         # fall back to grabbing the first [...] block.
         m = _re.search(r'\[.*\]', raw, _re.DOTALL)
         if not m:
-            return []
+            return [], False
         try:
             parsed = _json.loads(m.group(0))
         except Exception:
-            return []
+            return [], False
 
     if isinstance(parsed, dict):
         # Some models wrap it as {"tasks": [...]} despite instructions — handle gracefully.
@@ -160,14 +172,14 @@ def _parse_task_list(raw: str) -> list[str]:
                 parsed = v
                 break
         else:
-            return []
+            return [], False
 
     if not isinstance(parsed, list):
-        return []
+        return [], False
 
     titles = []
     for item in parsed:
         title = str(item).strip()
         if title and len(title) <= 200:
             titles.append(title)
-    return titles
+    return titles, True

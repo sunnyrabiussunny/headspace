@@ -99,7 +99,13 @@ async def run_task_scan_pass():
                 ).order_by(DiaryEntry.updated_at.desc()).limit(TASK_SCAN_MAX_PER_PASS)
             )
             for entry in entries_result.scalars().all():
-                titles = await extract_tasks(strip_mentions(entry.content))
+                titles, error = await extract_tasks(strip_mentions(entry.content))
+                if error:
+                    # Leave task_scanned_at unset so this entry gets retried on
+                    # a later pass instead of being silently locked out forever
+                    # by a transient Ollama outage.
+                    print(f"[task-scan] Skipping entry {entry.id} this pass: {error}")
+                    continue
                 for title in titles:
                     db.add(Task(
                         id=str(_uuid.uuid4()), user_id=user.id, title=title,
