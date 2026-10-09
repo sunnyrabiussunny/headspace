@@ -55,10 +55,21 @@ export default function DiaryPage() {
       .catch(() => setEntries([]))
   }, [selectedDate])
 
+  // Called after calendar events are imported into the diary — either by the
+  // auto-import effect below, or by the manual "📥 Import to Diary" button in
+  // CalendarEvents — to pull the newly-created entries into view.
+  const refreshAfterCalendarImport = useCallback(() => {
+    const dayStr = format(selectedDate, 'yyyy-MM-dd')
+    getEntriesForDate(dayStr).then(setEntries).catch(() => {})
+    getDatesWithEntries().then(d => setDatesWithEntries(new Set(d))).catch(() => {})
+  }, [selectedDate])
+
   // Auto-import today's calendar events into the diary (Settings → Automation
   // → "Auto-import Calendar Events into Diary"). Only runs for today — the
   // backend only ever imports each event once, so visiting today repeatedly
-  // is harmless and just picks up anything newly synced.
+  // is harmless and just picks up anything newly synced. If this doesn't
+  // seem to be firing (toggle just turned on, or missed a sync), use the
+  // 📥 Import to Diary button next to today's calendar events to force it.
   const calendarImportedForRef = useRef(null)
   useEffect(() => {
     const dayStr = format(selectedDate, 'yyyy-MM-dd')
@@ -71,8 +82,7 @@ export default function DiaryPage() {
       importCalendarToDiary(dayStr).then(res => {
         if (res.imported > 0) {
           toast.success(`Imported ${res.imported} calendar event${res.imported === 1 ? '' : 's'} into today's diary`)
-          getEntriesForDate(dayStr).then(setEntries).catch(() => {})
-          getDatesWithEntries().then(d => setDatesWithEntries(new Set(d))).catch(() => {})
+          refreshAfterCalendarImport()
         }
       }).catch(() => {})
     }).catch(() => {})
@@ -204,7 +214,7 @@ export default function DiaryPage() {
           <HabitChecklist date={format(selectedDate, 'yyyy-MM-dd')} />
 
           {/* Today's calendar events, synced from Google/Outlook .ics feeds */}
-          <CalendarEvents date={format(selectedDate, 'yyyy-MM-dd')} />
+          <CalendarEvents date={format(selectedDate, 'yyyy-MM-dd')} onImported={refreshAfterCalendarImport} />
 
           {/* Multi-year recall — same date in previous years */}
           <OnThisDay date={format(selectedDate, 'yyyy-MM-dd')} onJump={(d) => setSelectedDate(parseISO(d))} />

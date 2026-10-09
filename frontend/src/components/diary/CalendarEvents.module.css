@@ -48,3 +48,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.importBtn {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--divider);
+  color: var(--accent-teal);
+  transition: border-color 0.15s, background 0.15s;
+}
+.importBtn:hover:not(:disabled) { border-color: var(--accent-teal); background: var(--bg-hover); }
+.importBtn:disabled { opacity: 0.6; cursor: default; }
