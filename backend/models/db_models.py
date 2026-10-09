@@ -29,6 +29,9 @@ class User(Base):
     # Background automatic task creation toggle (Settings → Automation)
     auto_task_enabled      = Column(Boolean, default=False)
 
+    # Auto-import today's calendar events into the diary (Settings → Automation)
+    auto_calendar_import_enabled = Column(Boolean, default=False)
+
     # Telegram bot link (Settings → Telegram) — each user connects their own bot
     telegram_bot_token     = Column(String, nullable=True)
     telegram_chat_id       = Column(String, nullable=True)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { getExportStatus, runBackup, downloadBackup, importBackup, importCapacities, deleteAllData,
          listCalendarFeeds, createCalendarFeed, syncCalendarFeed, deleteCalendarFeed,
-         getSettings, setAutoTagEnabled, setAutoTaskEnabled, connectTelegram, disconnectTelegram } from '../../api'
+         getSettings, setAutoTagEnabled, setAutoTaskEnabled, setAutoCalendarImportEnabled, connectTelegram, disconnectTelegram } from '../../api'
 import { listUsers, createUser, changePassword } from '../../api_auth'
 import toast from 'react-hot-toast'
 import styles from './ExportPage.module.css'
@@ -51,6 +51,18 @@ export default function ExportPage({ user }) {
       toast.success(next ? 'Automatic task creation turned on' : 'Automatic task creation turned off')
     } catch { toast.error('Failed to update') }
     finally { setSavingAutoTask(false) }
+  }
+
+  const [savingAutoCalendarImport, setSavingAutoCalendarImport] = useState(false)
+  const handleToggleAutoCalendarImport = async () => {
+    setSavingAutoCalendarImport(true)
+    try {
+      const next = !settings.auto_calendar_import_enabled
+      await setAutoCalendarImportEnabled(next)
+      setSettings(s => ({ ...s, auto_calendar_import_enabled: next }))
+      toast.success(next ? 'Calendar auto-import turned on' : 'Calendar auto-import turned off')
+    } catch { toast.error('Failed to update') }
+    finally { setSavingAutoCalendarImport(false) }
   }
 
   const handleConnectTelegram = async (e) => {
@@ -194,7 +206,11 @@ export default function ExportPage({ user }) {
     setLoading(true)
     try {
       const result = await importCapacities(file)
-      toast.success(`Capacities import: ${result.entries_imported} entries, ${result.objects_imported} objects`)
+      const skipped = result.entries_skipped_duplicate || 0
+      toast.success(
+        `Capacities import: ${result.entries_imported} entries, ${result.objects_imported} objects`
+        + (skipped ? ` (${skipped} already-imported entries skipped — nothing existing was touched)` : '')
+      )
       e.target.value = ''
     } catch { toast.error('Capacities import failed') }
     finally { setLoading(false) }
@@ -389,6 +405,28 @@ export default function ExportPage({ user }) {
                 className={`${styles.toggleSwitch} ${settings.auto_task_enabled ? styles.toggleOn : ''}`}
                 onClick={handleToggleAutoTask}
                 disabled={savingAutoTask}
+              >
+                <span className={styles.toggleKnob} />
+              </button>
+            )}
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Auto-import Calendar Events into Diary</div>
+            <p className={styles.cardDesc}>
+              When on, opening today's diary automatically turns today's calendar events (from your
+              connected Calendar feeds) into diary entries — one per event, timestamped at the event's
+              start time, with any known object mentioned in the title or description auto-tagged, and
+              the location (if any) added as a clickable Google Maps link. Each event is only ever
+              imported once, so this never creates duplicates and never touches anything you've already
+              written — it only adds entries for events that haven't been imported yet. You can still
+              edit or delete an imported entry afterwards like any other.
+            </p>
+            {settings && (
+              <button
+                className={`${styles.toggleSwitch} ${settings.auto_calendar_import_enabled ? styles.toggleOn : ''}`}
+                onClick={handleToggleAutoCalendarImport}
+                disabled={savingAutoCalendarImport}
               >
                 <span className={styles.toggleKnob} />
               </button>

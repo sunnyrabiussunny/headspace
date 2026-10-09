@@ -25,6 +25,7 @@ LEGACY_TABLES = [
 NEW_COLUMNS = [
     ("users", "auto_tag_enabled", "BOOLEAN", "0"),
     ("users", "auto_task_enabled", "BOOLEAN", "0"),
+    ("users", "auto_calendar_import_enabled", "BOOLEAN", "0"),
     ("users", "telegram_bot_token", "VARCHAR", None),
     ("users", "telegram_chat_id", "VARCHAR", None),
     ("users", "telegram_last_update_id", "INTEGER", "0"),

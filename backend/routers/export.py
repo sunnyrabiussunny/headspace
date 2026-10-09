@@ -450,6 +450,7 @@ async def import_capacities(file: UploadFile = File(...), current_user: User = D
 
     entries_count = 0
     objects_count = 0
+    skipped_duplicate_entries = 0
 
     # Cache: title (lower) → object id, to avoid creating duplicates within one import
     obj_cache: dict[str, str] = {}
@@ -458,6 +459,25 @@ async def import_capacities(file: UploadFile = File(...), current_user: User = D
     existing_objs = await db.execute(select(KnowledgeObject).where(KnowledgeObject.user_id == user_id))
     for o in existing_objs.scalars().all():
         obj_cache[o.title.lower().strip()] = o.id
+
+    # Existing (date, content) pairs for this user — re-running an import
+    # (re-uploading the same or an updated Capacities export) must never pile
+    # duplicate diary entries on top of what's already here. Nothing is ever
+    # deleted or overwritten by this import; a would-be duplicate is just skipped.
+    existing_entries = await db.execute(select(DiaryEntry.date, DiaryEntry.content).where(DiaryEntry.user_id == user_id))
+    existing_entry_keys = {(d, c) for d, c in existing_entries.all()}
+
+    def _add_diary_entry_if_new(**kwargs) -> bool:
+        """db.add(DiaryEntry(...)) but skips an exact (date, content) duplicate
+        of an entry that already exists. Returns True if it was added."""
+        nonlocal skipped_duplicate_entries
+        key = (kwargs["date"], kwargs["content"])
+        if key in existing_entry_keys:
+            skipped_duplicate_entries += 1
+            return False
+        existing_entry_keys.add(key)
+        db.add(DiaryEntry(**kwargs))
+        return True
 
     async def _get_or_create_object(title: str, obj_type: str, properties: dict = None, description: str = "") -> str:
         """Return id of existing object with this title, or create and return new one."""
@@ -680,7 +700,7 @@ async def import_capacities(file: UploadFile = File(...), current_user: User = D
                 eid = str(uuid.uuid4())
                 hour, minute = (int(x) for x in time_str.split(':'))
                 ts = datetime(int(date_str[:4]), int(date_str[5:7]), int(date_str[8:10]), hour, minute)
-                db.add(DiaryEntry(
+                if _add_diary_entry_if_new(
                     id=eid,
                     user_id=user_id,
                     date=date_str,
@@ -688,8 +708,8 @@ async def import_capacities(file: UploadFile = File(...), current_user: User = D
                     tags=list(set(tags)),
                     created_at=ts,
                     updated_at=datetime.utcnow(),
-                ))
-                entries_count += 1
+                ):
+                    entries_count += 1
             return
 
         date_str = date_from_file or date_from_meta
@@ -698,7 +718,7 @@ async def import_capacities(file: UploadFile = File(...), current_user: User = D
             converted = await _convert_links(body, folder)
             tags = _tags_from_text(body)
             eid = str(uuid.uuid4())
-            db.add(DiaryEntry(
+            if _add_diary_entry_if_new(
                 id=eid,
                 user_id=user_id,
                 date=date_str,
@@ -706,8 +726,8 @@ async def import_capacities(file: UploadFile = File(...), current_user: User = D
                 tags=list(set(tags)),
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
-            ))
-            entries_count += 1
+            ):
+                entries_count += 1
 
         elif folder_type not in ('DIARY',):
             title = meta.get('title') or meta.get('name') or filename.replace('.md', '').strip()
@@ -785,6 +805,7 @@ async def import_capacities(file: UploadFile = File(...), current_user: User = D
         "status": "ok",
         "entries_imported": entries_count,
         "objects_imported": objects_count,
+        "entries_skipped_duplicate": skipped_duplicate_entries,
     }
 
 

@@ -6,7 +6,7 @@ import {
   startOfMonth, getDay, addMonths, subMonths
 } from 'date-fns'
 import toast from 'react-hot-toast'
-import { getDatesWithEntries, getEntriesForDate, createEntry, deleteEntry } from '../../api'
+import { getDatesWithEntries, getEntriesForDate, createEntry, deleteEntry, getSettings, importCalendarToDiary } from '../../api'
 import { getEntries as getTimeEntries, getProjects as getTimeProjects, fmtHours, fmtDuration } from '../../api_time'
 import DiaryEntryCard from './DiaryEntryCard'
 import HabitChecklist from './HabitChecklist'
@@ -53,6 +53,29 @@ export default function DiaryPage() {
     getEntriesForDate(format(selectedDate, 'yyyy-MM-dd'))
       .then(d => { setEntries(d); setEditingId(null) })
       .catch(() => setEntries([]))
+  }, [selectedDate])
+
+  // Auto-import today's calendar events into the diary (Settings → Automation
+  // → "Auto-import Calendar Events into Diary"). Only runs for today — the
+  // backend only ever imports each event once, so visiting today repeatedly
+  // is harmless and just picks up anything newly synced.
+  const calendarImportedForRef = useRef(null)
+  useEffect(() => {
+    const dayStr = format(selectedDate, 'yyyy-MM-dd')
+    if (!isToday(selectedDate)) return
+    if (calendarImportedForRef.current === dayStr) return
+    calendarImportedForRef.current = dayStr
+
+    getSettings().then(s => {
+      if (!s.auto_calendar_import_enabled) return
+      importCalendarToDiary(dayStr).then(res => {
+        if (res.imported > 0) {
+          toast.success(`Imported ${res.imported} calendar event${res.imported === 1 ? '' : 's'} into today's diary`)
+          getEntriesForDate(dayStr).then(setEntries).catch(() => {})
+          getDatesWithEntries().then(d => setDatesWithEntries(new Set(d))).catch(() => {})
+        }
+      }).catch(() => {})
+    }).catch(() => {})
   }, [selectedDate])
 
 

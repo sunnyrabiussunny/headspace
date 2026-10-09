@@ -6,6 +6,7 @@ import React from 'react'
  * 
  * Token types (matched in priority order):
  *   @[Name](id)     → teal bold underlined span, onClick navigates to object
+ *   [text](url)     → real <a> tag with custom text, opens new tab (pasted hyperlinks)
  *   https://...     → real <a> tag, opens new tab
  *   @Word           → teal bold (manually typed, no id to navigate to)
  *   #tag            → teal, onClick calls onTagClick
@@ -13,7 +14,7 @@ import React from 'react'
 export function renderRichContent(text, { navigate, onTagClick } = {}) {
   if (!text || !text.trim()) return null
 
-  const RE = /@\[([^\]]+)\]\(([^)]+)\)|https?:\/\/[^\s\)\]"'<>]+|@[a-zA-Z]\w{0,39}|#([a-zA-Z][a-zA-Z0-9_-]+)/g
+  const RE = /@\[([^\]]+)\]\(([^)]+)\)|\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)|https?:\/\/[^\s\)\]"'<>]+|@[a-zA-Z]\w{0,39}|#([a-zA-Z][a-zA-Z0-9_-]+)/g
   const parts = []
   let last = 0, m, key = 0
   RE.lastIndex = 0
@@ -44,6 +45,23 @@ export function renderRichContent(text, { navigate, onTagClick } = {}) {
             navigate?.(`/objects/${objId}`)
           }}>
           {name}
+        </a>
+      )
+    } else if (full.startsWith('[')) {
+      // Pasted hyperlink preserved as [text](url) — real link, custom text
+      const linkText = m[3], href = m[4]
+      parts.push(
+        <a key={key++}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: 'var(--accent-teal)',
+            textDecoration: 'underline',
+            textUnderlineOffset: '2px',
+          }}
+          onClick={e => e.stopPropagation()}>
+          {linkText}
         </a>
       )
     } else if (full.startsWith('http')) {

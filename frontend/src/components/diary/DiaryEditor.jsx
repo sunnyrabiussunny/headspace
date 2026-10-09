@@ -3,6 +3,7 @@ import { format, parseISO } from 'date-fns'
 import { updateEntry, mentionSearch, createObject, searchTags, autoTagEntry, listObjectTypes, scanEntryForTasks } from '../../api'
 import toast from 'react-hot-toast'
 import styles from './DiaryEditor.module.css'
+import { handleLinkPaste } from '../../utils/pasteLinks'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
 const TAG_RE     = /#([a-zA-Z0-9_\-]+)/g
@@ -454,6 +455,7 @@ export default function DiaryEditor({ entry, onSave, onClose, onDelete }) {
           className={styles.ta}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onPaste={handleLinkPaste}
           placeholder="Write here... Type @ to link objects (select from popup to make them clickable), # for tags, or paste a URL"
           spellCheck={false}
           defaultValue=""

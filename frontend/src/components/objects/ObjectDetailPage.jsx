@@ -8,6 +8,7 @@ import {
 } from '../../api'
 import toast from 'react-hot-toast'
 import styles from './ObjectDetailPage.module.css'
+import { handleLinkPaste } from '../../utils/pasteLinks'
 
 const MENTION_RE = /@\[([^\]]+)\]\(([^)]+)\)/g
 // Fixed color accents for the built-in types; anything else (custom types) falls back to a neutral color.
@@ -69,7 +70,7 @@ function reconcile(oldSegs, newDisplay) {
 function renderRichNotes(line, navigate) {
   if (!line || !line.trim()) return null
   // Use real <a> tags for mentions so clicks always work regardless of parent onClick
-  const RE = /@\[([^\]]+)\]\(([^)]+)\)|https?:\/\/[^\s\)\]"'<>]+|@[a-zA-Z]\w{0,39}|#([a-zA-Z][a-zA-Z0-9_-]+)/g
+  const RE = /@\[([^\]]+)\]\(([^)]+)\)|\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)|https?:\/\/[^\s\)\]"'<>]+|@[a-zA-Z]\w{0,39}|#([a-zA-Z][a-zA-Z0-9_-]+)/g
   const parts = []; let last = 0, m, key = 0
   RE.lastIndex = 0
   while ((m = RE.exec(line)) !== null) {
@@ -83,6 +84,16 @@ function renderRichNotes(line, navigate) {
           style={{ color:'var(--accent-teal)', fontWeight:600, textDecoration:'underline', textUnderlineOffset:'2px', cursor:'pointer' }}
           onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(`/objects/${objId}`) }}>
           {name}
+        </a>
+      )
+    } else if (full.startsWith('[')) {
+      // Pasted hyperlink preserved as [text](url)
+      const linkText = m[3], href = m[4]
+      parts.push(
+        <a key={key++} href={href} target="_blank" rel="noopener noreferrer"
+          style={{ color:'var(--accent-teal)', textDecoration:'underline', textUnderlineOffset:'2px' }}
+          onClick={e => e.stopPropagation()}>
+          {linkText}
         </a>
       )
     } else if (full.startsWith('http')) {
@@ -103,6 +114,19 @@ function renderRichNotes(line, navigate) {
   }
   if (last < line.length) parts.push(<span key={key++}>{line.slice(last)}</span>)
   return parts.length ? parts : null
+}
+
+// Grows the notes textarea to fit its content (up to 80vh, matching the CSS
+// max-height — beyond that it scrolls internally). Only grows, never shrinks
+// below whatever height the user may have manually dragged it to, so the
+// native resize handle and auto-grow don't fight each other.
+function autosizeTa(ta) {
+  if (!ta) return
+  const manualH = ta.dataset.manualH ? parseInt(ta.dataset.manualH, 10) : 0
+  ta.style.height = 'auto'
+  const target = Math.max(ta.scrollHeight, manualH)
+  const cap = Math.round(window.innerHeight * 0.8)
+  ta.style.height = Math.min(target, cap) + 'px'
 }
 
 function formatDate(s) {
@@ -160,7 +184,7 @@ export default function ObjectDetailPage() {
       const segs = parseMd(updated.notes || '')
       segsRef.current = segs
       const d = toDisplay(segs)
-      if (taRef.current) taRef.current.value = d
+      if (taRef.current) { taRef.current.value = d; autosizeTa(taRef.current) }
       pendingDisplayRef.current = d
       setNotesMd(updated.notes || '')
       toast.success('Auto-tagged existing objects it found')
@@ -229,10 +253,15 @@ export default function ObjectDetailPage() {
 
   useEffect(() => {
     if (isEditing && taRef.current) {
+      const ta = taRef.current
       const displayVal = toDisplay(segsRef.current)
-      taRef.current.value = displayVal
-      taRef.current.focus()
-      taRef.current.setSelectionRange(displayVal.length, displayVal.length)
+      ta.value = displayVal
+      ta.focus()
+      ta.setSelectionRange(displayVal.length, displayVal.length)
+      // Auto-size to fit existing content right away so long notes open
+      // fully expanded instead of scrolling inside a tiny box. After this,
+      // the user can still drag the bottom-right corner to resize further.
+      requestAnimationFrame(() => autosizeTa(ta))
     }
   }, [isEditing])
 
@@ -297,6 +326,7 @@ export default function ObjectDetailPage() {
     const cursor = ta.selectionStart
     segsRef.current = reconcile(segsRef.current, newVal)
     saveNotes()
+    autosizeTa(ta)
 
     if (skipNextRef.current) {
       skipNextRef.current = false
@@ -340,6 +370,7 @@ export default function ObjectDetailPage() {
     const newPos = anchor + token.length + 1
     ta.setSelectionRange(newPos, newPos)
     ta.focus()
+    autosizeTa(ta)
 
     skipNextRef.current      = true
     anchorRef.current        = -1
@@ -560,6 +591,8 @@ export default function ObjectDetailPage() {
               className={styles.notesTa}
               onChange={handleNotesChange}
               onKeyDown={handleKeyDown}
+              onPaste={e => { if (handleLinkPaste(e)) autosizeTa(e.target) }}
+              onMouseUp={e => { e.target.dataset.manualH = e.target.offsetHeight }}
               onBlur={() => {
                 clearTimeout(saveTimer.current)
                 updateObject(id, { notes: toMd(segsRef.current) }).catch(() => {})
@@ -568,6 +601,7 @@ export default function ObjectDetailPage() {
               spellCheck={false}
               defaultValue=""
             />
+            <div className={styles.notesTaResizeHint}>drag the corner to resize ⤡</div>
           </>
         )}
         {query !== null && (
@@ -612,24 +646,6 @@ export default function ObjectDetailPage() {
         )}
       </div>
 
-      {backlinks.length > 0 && (
-        <div className={styles.backlinks}>
-          <div className={styles.blHeader}>
-            <span>Backlinks</span>
-            <span className={styles.blCount}>{backlinks.length}</span>
-          </div>
-          {backlinks.map(item => (
-            <button key={item.id} className={styles.blRow} onClick={() => handleBacklinkClick(item)}>
-              <span className={styles.blIcon}>{item.type === 'diary' ? <CalIcon /> : <LayersIcon />}</span>
-              <div className={styles.blInfo}>
-                <span className={styles.blLabel}>{item.type === 'diary' ? formatDate(item.label) : item.label}</span>
-                {item.snippet && <span className={styles.blSnippet}>{item.snippet}</span>}
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Time entries that reference this object */}
       {timeEnts.length > 0 && (() => {
         const projMap = Object.fromEntries(timeProjs.map(p => [p.id, p]))
@@ -664,6 +680,25 @@ export default function ObjectDetailPage() {
           </div>
         )
       })()}
+
+      {/* Backlinks — always rendered last, at the bottom of the page */}
+      {backlinks.length > 0 && (
+        <div className={styles.backlinks}>
+          <div className={styles.blHeader}>
+            <span>Backlinks</span>
+            <span className={styles.blCount}>{backlinks.length}</span>
+          </div>
+          {backlinks.map(item => (
+            <button key={item.id} className={styles.blRow} onClick={() => handleBacklinkClick(item)}>
+              <span className={styles.blIcon}>{item.type === 'diary' ? <CalIcon /> : <LayersIcon />}</span>
+              <div className={styles.blInfo}>
+                <span className={styles.blLabel}>{item.type === 'diary' ? formatDate(item.label) : item.label}</span>
+                {item.snippet && <span className={styles.blSnippet}>{item.snippet}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Merge modal */}
       {showMerge && (

@@ -1,6 +1,8 @@
 import asyncio
+import re
 import uuid
 from datetime import datetime, timedelta, date as date_cls
+from urllib.parse import quote
 
 import httpx
 import icalendar
@@ -12,9 +14,9 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 from database import get_db, engine, AsyncSessionLocal
-from models.db_models import Base, User, KnowledgeObject
+from models.db_models import Base, User, KnowledgeObject, DiaryEntry, Mention
 from auth import get_current_user
-from utils.mentions import auto_tag_content
+from utils.mentions import auto_tag_content, extract_mentions
 
 router = APIRouter(prefix="/api/calendar", tags=["calendar"])
 
@@ -51,6 +53,19 @@ class CalendarEvent(Base):
     end_time    = Column(DateTime, nullable=True)
     all_day     = Column(Boolean, default=False)
     created_at  = Column(DateTime, default=datetime.utcnow)
+
+class CalendarImport(Base):
+    """Tracks which calendar events have already been turned into a diary
+    entry, keyed by the event's stable uid (ical UID + occurrence start —
+    survives calendar_events being wiped and re-synced every 30 minutes).
+    Prevents re-syncing a feed, or re-visiting today's diary, from ever
+    creating duplicate diary entries."""
+    __tablename__ = "calendar_imports"
+    id              = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id         = Column(String, nullable=False, index=True)
+    event_uid       = Column(String, nullable=False, index=True)
+    diary_entry_id  = Column(String, nullable=False)
+    created_at      = Column(DateTime, default=datetime.utcnow)
 
 async def init_calendar_tables():
     async with engine.begin() as conn:
@@ -263,3 +278,104 @@ async def get_events_for_date(date: str, current_user: User = Depends(get_curren
             "feed_color": feed_colors.get(e.feed_id, {}).get("color", "#4285f4"),
         })
     return out
+
+
+# ── Calendar → Diary import ─────────────────────────────────────────────────
+# Turns today's (or any date's) calendar events into diary entries: one entry
+# per event, titled with the event's activity, auto-tagging any known object
+# found in the title/description, and — if the event has a location — adding
+# a line with the location name as a clickable Google Maps link. Nothing
+# existing is ever touched: each event is imported at most once (tracked by
+# its stable uid in CalendarImport), so re-running this for the same day is
+# always safe and just imports whatever's new.
+
+TAG_RE = re.compile(r'#([a-zA-Z][a-zA-Z0-9_-]{0,39})')
+
+def _extract_tags(text: str) -> list:
+    return list({m.group(1).lower() for m in TAG_RE.finditer(text or "")})
+
+def _maps_url(location: str) -> str:
+    return f"https://www.google.com/maps/search/?api=1&query={quote(location)}"
+
+def _event_diary_content(event: "CalendarEvent", objects: list) -> str:
+    title_tagged, _ = auto_tag_content(event.title or "(untitled event)", objects)
+    lines = [title_tagged]
+    if event.description and event.description.strip() and event.description.strip() != (event.title or "").strip():
+        desc_tagged, _ = auto_tag_content(event.description.strip(), objects)
+        lines.append(desc_tagged)
+    if event.location and event.location.strip():
+        lines.append(f"📍 [{event.location.strip()}]({_maps_url(event.location.strip())})")
+    return "\n".join(lines)
+
+
+async def import_events_to_diary(db: AsyncSession, user: User, date: str) -> int:
+    """Imports every not-yet-imported calendar event overlapping `date`
+    (YYYY-MM-DD, interpreted the same way as GET /events/{date}) as a new
+    diary entry. Returns how many entries were created."""
+    try:
+        day_start = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(400, "date must be YYYY-MM-DD")
+    day_end = day_start + timedelta(days=1)
+
+    events_r = await db.execute(
+        select(CalendarEvent).where(
+            CalendarEvent.user_id == user.id,
+            CalendarEvent.start_time < day_end,
+            or_(
+                and_(CalendarEvent.end_time == None, CalendarEvent.start_time >= day_start),
+                and_(CalendarEvent.end_time != None, CalendarEvent.end_time > day_start),
+            ),
+        ).order_by(CalendarEvent.start_time)
+    )
+    events = events_r.scalars().all()
+    if not events:
+        return 0
+
+    uids = [e.uid for e in events]
+    imported_r = await db.execute(
+        select(CalendarImport.event_uid).where(CalendarImport.user_id == user.id, CalendarImport.event_uid.in_(uids))
+    )
+    already_imported = {row[0] for row in imported_r.all()}
+
+    new_events = [e for e in events if e.uid not in already_imported]
+    if not new_events:
+        return 0
+
+    objs_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.user_id == user.id))
+    objects = objs_result.scalars().all()
+
+    imported_count = 0
+    for event in new_events:
+        content = _event_diary_content(event, objects)
+        entry = DiaryEntry(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            date=date,
+            content=content,
+            tags=_extract_tags(content),
+            created_at=event.start_time,
+            updated_at=event.start_time,
+        )
+        db.add(entry)
+        await db.flush()   # get entry.id without a separate round trip
+
+        for _name, object_id in extract_mentions(content):
+            db.add(Mention(
+                id=str(uuid.uuid4()), user_id=user.id, object_id=object_id,
+                source_type="diary", source_id=entry.id,
+            ))
+
+        db.add(CalendarImport(
+            id=str(uuid.uuid4()), user_id=user.id, event_uid=event.uid, diary_entry_id=entry.id,
+        ))
+        imported_count += 1
+
+    await db.commit()
+    return imported_count
+
+
+@router.post("/import-to-diary/{date}")
+async def import_to_diary(date: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    count = await import_events_to_diary(db, current_user, date)
+    return {"imported": count}

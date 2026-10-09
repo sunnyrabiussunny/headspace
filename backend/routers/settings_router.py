@@ -16,6 +16,9 @@ class AutoTagUpdate(BaseModel):
 class AutoTaskUpdate(BaseModel):
     enabled: bool
 
+class AutoCalendarImportUpdate(BaseModel):
+    enabled: bool
+
 class TelegramConnect(BaseModel):
     bot_token: str
 
@@ -25,6 +28,7 @@ async def get_settings(current_user: User = Depends(get_current_user)):
     return {
         "auto_tag_enabled": current_user.auto_tag_enabled,
         "auto_task_enabled": current_user.auto_task_enabled,
+        "auto_calendar_import_enabled": current_user.auto_calendar_import_enabled,
         "telegram_connected": bool(current_user.telegram_bot_token),
         "telegram_linked": bool(current_user.telegram_chat_id),
     }
@@ -42,6 +46,13 @@ async def set_auto_task(payload: AutoTaskUpdate, current_user: User = Depends(ge
     current_user.auto_task_enabled = payload.enabled
     await db.commit()
     return {"auto_task_enabled": current_user.auto_task_enabled}
+
+
+@router.put("/auto-calendar-import")
+async def set_auto_calendar_import(payload: AutoCalendarImportUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    current_user.auto_calendar_import_enabled = payload.enabled
+    await db.commit()
+    return {"auto_calendar_import_enabled": current_user.auto_calendar_import_enabled}
 
 
 @router.post("/telegram")

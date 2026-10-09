@@ -99,8 +99,10 @@
 .notesEditorHeader   { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
 .notesEditingLabel   { font-size:12px; color:var(--text-muted); }
 .doneBtn             { display:flex; align-items:center; gap:5px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--accent-teal); color:#000; font-weight:700; }
-.notesTa             { width:100%; min-height:200px; padding:12px 0; font-size:15px; line-height:1.75; font-family:var(--font); color:var(--text-primary); background:transparent; border:none; outline:none; resize:none; display:block; }
+.notesTa             { width:100%; min-height:400px; max-height:80vh; padding:12px 0; font-size:15px; line-height:1.75; font-family:var(--font); color:var(--text-primary); background:transparent; border:none; outline:none; resize:vertical; display:block; overflow-y:auto; }
 .notesTa::placeholder { color:var(--text-muted); }
+/* Custom drag handle under the textarea — makes the native resize affordance obvious */
+.notesTaResizeHint { text-align:right; font-size:11px; color:var(--text-muted); margin-top:4px; user-select:none; opacity:0.7; }
 
 /* ── Popup — position:FIXED so it escapes all parent stacking/overflow ── */
 .popup {
