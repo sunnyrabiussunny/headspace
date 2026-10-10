@@ -103,6 +103,8 @@ export const connectTelegram    = (bot_token) => api.post('/settings/telegram', 
 export const disconnectTelegram = () => api.delete('/settings/telegram')
 export const setAutoTaskEnabled = (enabled) => api.put('/settings/auto-task', { enabled }).then(r => r.data)
 export const setAutoCalendarImportEnabled = (enabled) => api.put('/settings/auto-calendar-import', { enabled }).then(r => r.data)
+export const getAIModels = () => api.get('/settings/ai-models').then(r => r.data)
+export const setAIConfig = (data) => api.put('/settings/ai-config', data).then(r => r.data)
 
 // ── Tasks ────────────────────────────────────────────────────────────────
 export const listTasks          = () => api.get('/tasks').then(r => r.data)

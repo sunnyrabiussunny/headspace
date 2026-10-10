@@ -297,7 +297,10 @@ def _extract_tags(text: str) -> list:
 def _maps_url(location: str) -> str:
     return f"https://www.google.com/maps/search/?api=1&query={quote(location)}"
 
-def _event_diary_content(event: "CalendarEvent", objects: list) -> str:
+def _mechanical_event_content(event: "CalendarEvent", objects: list) -> str:
+    """The plain, non-AI format: title, description, and a location line as
+    a clickable Google Maps link. Used whenever no AI model is configured,
+    or the AI call fails — an import should never come up empty-handed."""
     title_tagged, _ = auto_tag_content(event.title or "(untitled event)", objects)
     lines = [title_tagged]
     if event.description and event.description.strip() and event.description.strip() != (event.title or "").strip():
@@ -308,7 +311,34 @@ def _event_diary_content(event: "CalendarEvent", objects: list) -> str:
     return "\n".join(lines)
 
 
-async def import_events_to_diary(db: AsyncSession, user: User, date: str) -> int:
+async def _event_diary_content(user: User, event: "CalendarEvent", objects: list) -> tuple[str, bool, "str | None"]:
+    """Returns (content, ai_used, ai_error). Tries the AI Diary Writer first
+    (Settings → Automation) when a model is configured; always falls back to
+    the mechanical format on any failure so an import never comes up empty."""
+    from utils.ai_diary import generate_diary_narrative
+
+    if not user.ai_model:
+        return _mechanical_event_content(event, objects), False, None
+
+    start_label = event.start_time.strftime("%A, %I:%M %p")
+    end_label = event.end_time.strftime("%I:%M %p") if event.end_time else None
+    narrative, error = await generate_diary_narrative(
+        provider=user.ai_provider, model=user.ai_model, context=user.ai_diary_context,
+        title=event.title or "(untitled event)", description=event.description,
+        location=event.location, start_label=start_label, end_label=end_label,
+        openai_api_key=user.openai_api_key, anthropic_api_key=user.anthropic_api_key,
+    )
+    if not narrative:
+        return _mechanical_event_content(event, objects), False, error
+
+    content = narrative.strip()
+    if event.location and event.location.strip():
+        content += f"\n\n📍 [{event.location.strip()}]({_maps_url(event.location.strip())})"
+    content, _ = auto_tag_content(content, objects)
+    return content, True, None
+
+
+async def import_events_to_diary(db: AsyncSession, user: User, date: str) -> dict:
     """Imports every not-yet-imported calendar event overlapping `date`
     (YYYY-MM-DD, interpreted the same way as GET /events/{date}) as a new
     diary entry. Returns how many entries were created."""
@@ -330,7 +360,7 @@ async def import_events_to_diary(db: AsyncSession, user: User, date: str) -> int
     )
     events = events_r.scalars().all()
     if not events:
-        return 0
+        return {"imported": 0, "ai_used": False, "ai_error": None}
 
     uids = [e.uid for e in events]
     imported_r = await db.execute(
@@ -340,14 +370,19 @@ async def import_events_to_diary(db: AsyncSession, user: User, date: str) -> int
 
     new_events = [e for e in events if e.uid not in already_imported]
     if not new_events:
-        return 0
+        return {"imported": 0, "ai_used": False, "ai_error": None}
 
     objs_result = await db.execute(select(KnowledgeObject).where(KnowledgeObject.user_id == user.id))
     objects = objs_result.scalars().all()
 
     imported_count = 0
+    any_ai_used = False
+    last_ai_error = None
     for event in new_events:
-        content = _event_diary_content(event, objects)
+        content, ai_used, ai_error = await _event_diary_content(user, event, objects)
+        any_ai_used = any_ai_used or ai_used
+        if ai_error:
+            last_ai_error = ai_error
         entry = DiaryEntry(
             id=str(uuid.uuid4()),
             user_id=user.id,
@@ -372,10 +407,9 @@ async def import_events_to_diary(db: AsyncSession, user: User, date: str) -> int
         imported_count += 1
 
     await db.commit()
-    return imported_count
+    return {"imported": imported_count, "ai_used": any_ai_used, "ai_error": last_ai_error}
 
 
 @router.post("/import-to-diary/{date}")
 async def import_to_diary(date: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    count = await import_events_to_diary(db, current_user, date)
-    return {"imported": count}
+    return await import_events_to_diary(db, current_user, date)

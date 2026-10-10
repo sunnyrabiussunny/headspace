@@ -32,6 +32,15 @@ class User(Base):
     # Auto-import today's calendar events into the diary (Settings → Automation)
     auto_calendar_import_enabled = Column(Boolean, default=False)
 
+    # AI Diary Writer — turns an imported calendar event into a humanized,
+    # first-person diary paragraph instead of a mechanical title/location
+    # dump (Settings → Automation → AI Diary Writer).
+    ai_provider        = Column(String, default="ollama")   # "ollama" | "openai" | "anthropic"
+    ai_model           = Column(String, nullable=True)       # model name/id for the chosen provider
+    ai_diary_context   = Column(Text, nullable=True)         # free-text personal background fed into the prompt
+    openai_api_key     = Column(String, nullable=True)
+    anthropic_api_key  = Column(String, nullable=True)
+
     # Telegram bot link (Settings → Telegram) — each user connects their own bot
     telegram_bot_token     = Column(String, nullable=True)
     telegram_chat_id       = Column(String, nullable=True)

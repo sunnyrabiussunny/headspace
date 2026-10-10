@@ -116,6 +116,32 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-red, #e05252) 20%, transparent);
 }
 
+/* ── AI Diary Writer form ── */
+.formRow { display: flex; flex-direction: column; gap: 6px; }
+.formLabel { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.formInput, .formSelect, .formTextarea {
+  background: var(--bg-secondary);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  width: 100%;
+  font-family: var(--font);
+}
+.formInput:focus, .formSelect:focus, .formTextarea:focus { border-color: var(--accent-teal); }
+.formTextarea { resize: vertical; min-height: 90px; line-height: 1.5; }
+.formHint { font-size: 12px; color: var(--text-muted); }
+.formError { font-size: 12px; color: var(--accent-red, #e06f6f); }
+
+.providerRow { display: flex; flex-wrap: wrap; gap: 6px; }
+.providerChip {
+  font-size: 12px; padding: 6px 12px; border-radius: 14px;
+  background: var(--bg-secondary); border: 1px solid var(--divider); color: var(--text-secondary);
+}
+.providerChipActive { background: color-mix(in srgb, var(--accent-teal) 20%, transparent); color: var(--accent-teal); border-color: var(--accent-teal); }
+
 /* ── Settings tabs ── */
 .stabs {
   display: flex;

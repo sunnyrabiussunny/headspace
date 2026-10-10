@@ -28,10 +28,16 @@ export default function CalendarEvents({ date, onImported }) {
     try {
       const res = await importCalendarToDiary(date)
       if (res.imported > 0) {
-        toast.success(`Imported ${res.imported} event${res.imported === 1 ? '' : 's'} into the diary`)
+        toast.success(
+          `Imported ${res.imported} event${res.imported === 1 ? '' : 's'} into the diary`
+          + (res.ai_used ? ' — written by your AI Diary Writer' : '')
+        )
         onImported?.()
       } else {
         toast('All of today\'s events are already in the diary', { icon: 'ℹ️' })
+      }
+      if (res.ai_error) {
+        toast.error(`AI Diary Writer: ${res.ai_error} (used the plain format instead)`, { duration: 6000 })
       }
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Import failed')

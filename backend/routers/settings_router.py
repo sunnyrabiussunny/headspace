@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
@@ -6,6 +7,7 @@ from database import get_db
 from models.db_models import User
 from auth import get_current_user
 from utils.telegram_client import get_bot_info
+from utils.ai_diary import list_ollama_models, list_openai_models, list_anthropic_models
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -22,6 +24,14 @@ class AutoCalendarImportUpdate(BaseModel):
 class TelegramConnect(BaseModel):
     bot_token: str
 
+class AIConfigUpdate(BaseModel):
+    provider: Optional[str] = None             # "ollama" | "openai" | "anthropic"
+    model: Optional[str] = None
+    diary_context: Optional[str] = None
+    # Each key field: omit to leave unchanged, "" to clear, a value to set.
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+
 
 @router.get("")
 async def get_settings(current_user: User = Depends(get_current_user)):
@@ -31,6 +41,11 @@ async def get_settings(current_user: User = Depends(get_current_user)):
         "auto_calendar_import_enabled": current_user.auto_calendar_import_enabled,
         "telegram_connected": bool(current_user.telegram_bot_token),
         "telegram_linked": bool(current_user.telegram_chat_id),
+        "ai_provider": current_user.ai_provider or "ollama",
+        "ai_model": current_user.ai_model,
+        "ai_diary_context": current_user.ai_diary_context or "",
+        "has_openai_key": bool(current_user.openai_api_key),
+        "has_anthropic_key": bool(current_user.anthropic_api_key),
     }
 
 
@@ -53,6 +68,44 @@ async def set_auto_calendar_import(payload: AutoCalendarImportUpdate, current_us
     current_user.auto_calendar_import_enabled = payload.enabled
     await db.commit()
     return {"auto_calendar_import_enabled": current_user.auto_calendar_import_enabled}
+
+
+@router.put("/ai-config")
+async def set_ai_config(payload: AIConfigUpdate, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if payload.provider is not None:
+        if payload.provider not in ("ollama", "openai", "anthropic"):
+            raise HTTPException(400, "provider must be 'ollama', 'openai', or 'anthropic'")
+        current_user.ai_provider = payload.provider
+    if payload.model is not None:
+        current_user.ai_model = payload.model.strip() or None
+    if payload.diary_context is not None:
+        current_user.ai_diary_context = payload.diary_context
+    if payload.openai_api_key is not None:
+        current_user.openai_api_key = payload.openai_api_key.strip() or None
+    if payload.anthropic_api_key is not None:
+        current_user.anthropic_api_key = payload.anthropic_api_key.strip() or None
+    await db.commit()
+    return {
+        "ai_provider": current_user.ai_provider,
+        "ai_model": current_user.ai_model,
+        "ai_diary_context": current_user.ai_diary_context or "",
+        "has_openai_key": bool(current_user.openai_api_key),
+        "has_anthropic_key": bool(current_user.anthropic_api_key),
+    }
+
+
+@router.get("/ai-models")
+async def get_ai_models(current_user: User = Depends(get_current_user)):
+    """Live-queries each provider so newly installed Ollama models (or a
+    freshly-saved API key) show up immediately — nothing here is cached."""
+    ollama_models, ollama_error = await list_ollama_models()
+    openai_models, openai_error = await list_openai_models(current_user.openai_api_key)
+    anthropic_models, anthropic_error = await list_anthropic_models(current_user.anthropic_api_key)
+    return {
+        "ollama":    {"models": ollama_models,    "error": ollama_error},
+        "openai":    {"models": openai_models,    "error": openai_error},
+        "anthropic": {"models": anthropic_models, "error": anthropic_error},
+    }
 
 
 @router.post("/telegram")

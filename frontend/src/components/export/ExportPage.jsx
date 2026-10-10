@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { getExportStatus, runBackup, downloadBackup, importBackup, importCapacities, deleteAllData,
          listCalendarFeeds, createCalendarFeed, syncCalendarFeed, deleteCalendarFeed,
-         getSettings, setAutoTagEnabled, setAutoTaskEnabled, setAutoCalendarImportEnabled, connectTelegram, disconnectTelegram } from '../../api'
+         getSettings, setAutoTagEnabled, setAutoTaskEnabled, setAutoCalendarImportEnabled,
+         getAIModels, setAIConfig, connectTelegram, disconnectTelegram } from '../../api'
 import { listUsers, createUser, changePassword } from '../../api_auth'
 import toast from 'react-hot-toast'
 import styles from './ExportPage.module.css'
@@ -63,6 +64,62 @@ export default function ExportPage({ user }) {
       toast.success(next ? 'Calendar auto-import turned on' : 'Calendar auto-import turned off')
     } catch { toast.error('Failed to update') }
     finally { setSavingAutoCalendarImport(false) }
+  }
+
+  // ── AI Diary Writer ──
+  const [aiModels, setAiModels] = useState(null)       // { ollama: {models, error}, openai: {...}, anthropic: {...} }
+  const [loadingAiModels, setLoadingAiModels] = useState(false)
+  const [aiProvider, setAiProvider] = useState('ollama')
+  const [aiModel, setAiModel] = useState('')
+  const [aiContext, setAiContext] = useState('')
+  const [openaiKeyInput, setOpenaiKeyInput] = useState('')
+  const [anthropicKeyInput, setAnthropicKeyInput] = useState('')
+  const [savingAiConfig, setSavingAiConfig] = useState(false)
+
+  useEffect(() => {
+    if (settings) {
+      setAiProvider(settings.ai_provider || 'ollama')
+      setAiModel(settings.ai_model || '')
+      setAiContext(settings.ai_diary_context || '')
+    }
+  }, [settings?.ai_provider, settings?.ai_model, settings?.ai_diary_context])
+
+  const refreshAiModels = async () => {
+    setLoadingAiModels(true)
+    try { setAiModels(await getAIModels()) }
+    catch { toast.error('Failed to load model list') }
+    finally { setLoadingAiModels(false) }
+  }
+
+  useEffect(() => {
+    if (settingsTab === 'automation') refreshAiModels()
+  }, [settingsTab])
+
+  const handleSaveAiConfig = async () => {
+    setSavingAiConfig(true)
+    try {
+      const payload = { provider: aiProvider, model: aiModel, diary_context: aiContext }
+      if (openaiKeyInput.trim()) payload.openai_api_key = openaiKeyInput.trim()
+      if (anthropicKeyInput.trim()) payload.anthropic_api_key = anthropicKeyInput.trim()
+      const result = await setAIConfig(payload)
+      setSettings(s => ({ ...s, ...result }))
+      setOpenaiKeyInput('')
+      setAnthropicKeyInput('')
+      toast.success('AI Diary Writer settings saved')
+      if (payload.openai_api_key || payload.anthropic_api_key) refreshAiModels()
+    } catch { toast.error('Failed to save AI settings') }
+    finally { setSavingAiConfig(false) }
+  }
+
+  const handleClearKey = async (which) => {
+    setSavingAiConfig(true)
+    try {
+      const payload = which === 'openai' ? { openai_api_key: '' } : { anthropic_api_key: '' }
+      const result = await setAIConfig(payload)
+      setSettings(s => ({ ...s, ...result }))
+      toast.success(`${which === 'openai' ? 'OpenAI' : 'Anthropic'} key removed`)
+    } catch { toast.error('Failed to remove key') }
+    finally { setSavingAiConfig(false) }
   }
 
   const handleConnectTelegram = async (e) => {
@@ -431,6 +488,115 @@ export default function ExportPage({ user }) {
                 <span className={styles.toggleKnob} />
               </button>
             )}
+          </div>
+
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>AI Diary Writer (Calendar Import)</div>
+            <p className={styles.cardDesc}>
+              When a model is picked below, importing calendar events (automatically or via the
+              📥 Import to Diary button) writes each one as a short first-person diary paragraph instead
+              of a plain title/location line — using the background you give it here. Works with your
+              own local Ollama model, or your own OpenAI / Anthropic (Claude) API key. If nothing is
+              picked, imports fall back to the plain format. A location, when present, is always added
+              as a clickable Google Maps link too.
+            </p>
+
+            <div className={styles.formRow}>
+              <label className={styles.formLabel}>Provider</label>
+              <div className={styles.providerRow}>
+                {[['ollama', '🖥️ Ollama (local)'], ['openai', '🟢 OpenAI'], ['anthropic', '🟣 Claude']].map(([key, label]) => (
+                  <button key={key}
+                    className={`${styles.providerChip} ${aiProvider === key ? styles.providerChipActive : ''}`}
+                    onClick={() => { setAiProvider(key); setAiModel('') }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.formRow}>
+              <label className={styles.formLabel}>Model</label>
+              {(() => {
+                const bucket = aiModels?.[aiProvider]
+                const models = bucket?.models || []
+                return (
+                  <>
+                    <select
+                      className={styles.formSelect}
+                      value={aiModel}
+                      onChange={e => setAiModel(e.target.value)}
+                    >
+                      <option value="">— choose a model —</option>
+                      {models.map(m => <option key={m} value={m}>{m}</option>)}
+                      {aiModel && !models.includes(aiModel) && <option value={aiModel}>{aiModel} (saved)</option>}
+                    </select>
+                    <div className={styles.btnRow}>
+                      <button className="btn btn-secondary" onClick={refreshAiModels} disabled={loadingAiModels}>
+                        {loadingAiModels ? 'Refreshing…' : '🔄 Refresh models'}
+                      </button>
+                    </div>
+                    {bucket?.error && <div className={styles.formError}>{bucket.error}</div>}
+                    {aiProvider === 'ollama' && !bucket?.error && models.length === 0 && !loadingAiModels && (
+                      <div className={styles.formHint}>
+                        No models found on your Ollama instance yet — pull one (e.g. `ollama pull llama3.1`) then refresh.
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+            </div>
+
+            {aiProvider === 'openai' && (
+              <div className={styles.formRow}>
+                <label className={styles.formLabel}>OpenAI API key</label>
+                <input
+                  className={styles.formInput}
+                  type="password"
+                  placeholder={settings?.has_openai_key ? '•••••••••••• (saved — enter a new key to replace)' : 'sk-...'}
+                  value={openaiKeyInput}
+                  onChange={e => setOpenaiKeyInput(e.target.value)}
+                />
+                {settings?.has_openai_key && (
+                  <div className={styles.btnRow}>
+                    <button className="btn btn-secondary" onClick={() => handleClearKey('openai')}>Remove saved key</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {aiProvider === 'anthropic' && (
+              <div className={styles.formRow}>
+                <label className={styles.formLabel}>Anthropic API key</label>
+                <input
+                  className={styles.formInput}
+                  type="password"
+                  placeholder={settings?.has_anthropic_key ? '•••••••••••• (saved — enter a new key to replace)' : 'sk-ant-...'}
+                  value={anthropicKeyInput}
+                  onChange={e => setAnthropicKeyInput(e.target.value)}
+                />
+                {settings?.has_anthropic_key && (
+                  <div className={styles.btnRow}>
+                    <button className="btn btn-secondary" onClick={() => handleClearKey('anthropic')}>Remove saved key</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className={styles.formRow}>
+              <label className={styles.formLabel}>Personal background (used to personalize entries)</label>
+              <textarea
+                className={styles.formTextarea}
+                placeholder="e.g. I live in Kivisalmi, Lappeenranta. I'm Muslim and try to attend Friday prayers. My friends often meet at Leiri mosque. I work at Keto Software..."
+                value={aiContext}
+                onChange={e => setAiContext(e.target.value)}
+              />
+            </div>
+
+            <div className={styles.btnRow}>
+              <button className="btn btn-primary" onClick={handleSaveAiConfig} disabled={savingAiConfig}>
+                {savingAiConfig ? 'Saving…' : 'Save AI Diary Writer settings'}
+              </button>
+            </div>
           </div>
 
           <div className={styles.card}>
