@@ -11,7 +11,7 @@ import styles from './ExportPage.module.css'
 const GuidePage = lazy(() => import('../guide/GuidePage'))
 
 export default function ExportPage({ user }) {
-  const [settingsTab, setSettingsTab] = useState('backup')
+  const [settingsTab, setSettingsTab] = useState('automation')
   const [status,      setStatus]      = useState(null)
   const [loading,     setLoading]     = useState(false)
   const [showDeleteAll, setShowDeleteAll]   = useState(false)
@@ -74,6 +74,7 @@ export default function ExportPage({ user }) {
   const [aiContext, setAiContext] = useState('')
   const [openaiKeyInput, setOpenaiKeyInput] = useState('')
   const [anthropicKeyInput, setAnthropicKeyInput] = useState('')
+  const [ollamaUrl, setOllamaUrl] = useState('')
   const [savingAiConfig, setSavingAiConfig] = useState(false)
 
   useEffect(() => {
@@ -81,8 +82,9 @@ export default function ExportPage({ user }) {
       setAiProvider(settings.ai_provider || 'ollama')
       setAiModel(settings.ai_model || '')
       setAiContext(settings.ai_diary_context || '')
+      setOllamaUrl(settings.ollama_url || '')
     }
-  }, [settings?.ai_provider, settings?.ai_model, settings?.ai_diary_context])
+  }, [settings?.ai_provider, settings?.ai_model, settings?.ai_diary_context, settings?.ollama_url])
 
   const refreshAiModels = async () => {
     setLoadingAiModels(true)
@@ -98,7 +100,7 @@ export default function ExportPage({ user }) {
   const handleSaveAiConfig = async () => {
     setSavingAiConfig(true)
     try {
-      const payload = { provider: aiProvider, model: aiModel, diary_context: aiContext }
+      const payload = { provider: aiProvider, model: aiModel, diary_context: aiContext, ollama_url: ollamaUrl.trim() }
       if (openaiKeyInput.trim()) payload.openai_api_key = openaiKeyInput.trim()
       if (anthropicKeyInput.trim()) payload.anthropic_api_key = anthropicKeyInput.trim()
       const result = await setAIConfig(payload)
@@ -106,7 +108,7 @@ export default function ExportPage({ user }) {
       setOpenaiKeyInput('')
       setAnthropicKeyInput('')
       toast.success('AI Diary Writer settings saved')
-      if (payload.openai_api_key || payload.anthropic_api_key) refreshAiModels()
+      if (payload.openai_api_key || payload.anthropic_api_key || payload.ollama_url !== (settings?.ollama_url || '')) refreshAiModels()
     } catch { toast.error('Failed to save AI settings') }
     finally { setSavingAiConfig(false) }
   }
@@ -306,20 +308,23 @@ export default function ExportPage({ user }) {
     finally { setLoading(false) }
   }
 
+  // Most-used first, reference material near the end, destructive actions
+  // always last — and this is also the tab the page opens on (see the
+  // settingsTab useState above).
   const TABS = [
-    { id: 'account', label: '👤 Account' },
     { id: 'automation', label: '🤖 Automation' },
-    { id: 'calendars', label: '📅 Calendars' },
-    { id: 'backup', label: '💾 Backup & Import' },
-    { id: 'danger', label: '⚠️ Data Management' },
-    { id: 'guide',  label: '📖 Guide' },
+    { id: 'account',    label: '👤 Account' },
+    { id: 'calendars',  label: '📅 Calendars' },
+    { id: 'backup',     label: '💾 Backup & Import' },
+    { id: 'guide',      label: '📖 Guide' },
+    { id: 'danger',     label: '⚠️ Data Management' },
   ]
 
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <h1 className={styles.title}>Settings</h1>
-        <p className={styles.subtitle}>Backup, import, data management and guide.</p>
+        <p className={styles.subtitle}>Automation, calendars, account, backup, guide and data management.</p>
       </div>
 
       <div className={styles.stabs}>
@@ -513,6 +518,24 @@ export default function ExportPage({ user }) {
                 ))}
               </div>
             </div>
+
+            {aiProvider === 'ollama' && (
+              <div className={styles.formRow}>
+                <label className={styles.formLabel}>Ollama Server URL</label>
+                <input
+                  className={styles.formInput}
+                  type="text"
+                  placeholder="http://localhost:11434 (defaults to this server's own Ollama if left blank)"
+                  value={ollamaUrl}
+                  onChange={e => setOllamaUrl(e.target.value)}
+                />
+                <div className={styles.formHint}>
+                  Each server this is deployed on should point at its own reachable Ollama instance — e.g.
+                  http://192.168.10.103:11434 on that machine, http://192.168.10.120:11434 on the other. Leave
+                  blank to use the backend's OLLAMA_URL environment variable.
+                </div>
+              </div>
+            )}
 
             <div className={styles.formRow}>
               <label className={styles.formLabel}>Model</label>

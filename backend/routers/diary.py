@@ -141,7 +141,7 @@ async def ask_diary(payload: AskRequest, current_user: User = Depends(get_curren
     top_entries = retrieve_relevant_entries(question, entries, top_n=12)
     context = [(e.date, strip_mentions(e.content or "")) for e in top_entries]
 
-    answer = await ask_ollama(question, context)
+    answer = await ask_ollama(question, context, ollama_url=current_user.ollama_url)
 
     return {
         "answer": answer,
@@ -216,7 +216,7 @@ async def scan_entry_for_tasks(entry_id: str, current_user: User = Depends(get_c
     if not entry:
         raise HTTPException(404, "Entry not found")
 
-    titles, error = await extract_tasks(_strip(entry.content))
+    titles, error = await extract_tasks(_strip(entry.content), ollama_url=current_user.ollama_url)
     if error:
         raise HTTPException(502, error)
 

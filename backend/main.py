@@ -31,6 +31,7 @@ NEW_COLUMNS = [
     ("users", "ai_diary_context", "TEXT", None),
     ("users", "openai_api_key", "VARCHAR", None),
     ("users", "anthropic_api_key", "VARCHAR", None),
+    ("users", "ollama_url", "VARCHAR", None),
     ("users", "telegram_bot_token", "VARCHAR", None),
     ("users", "telegram_chat_id", "VARCHAR", None),
     ("users", "telegram_last_update_id", "INTEGER", "0"),

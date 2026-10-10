@@ -11,7 +11,7 @@ import os
 import re
 import httpx
 
-OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://192.168.10.120:11434")
+OLLAMA_URL   = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "60"))
 
@@ -21,6 +21,15 @@ STOPWORDS = {
     "she","it","we","they","this","that","what","when","where","who","how","why","not",
     "did","have","has","had","will","would","can","could","should","did","last","did",
 }
+
+def _resolve_url(ollama_url: str | None) -> str:
+    """A per-user Ollama URL (Settings → Automation → AI Diary Writer) always
+    wins when set; otherwise falls back to the OLLAMA_URL environment
+    variable. This is what lets the same docker image/compose file be
+    deployed to different hosts, each pointing at its own Ollama instance,
+    without baking any one machine's IP into the image."""
+    return (ollama_url or "").strip() or OLLAMA_URL
+
 
 def _tokenize(text: str) -> set:
     return {w for w in re.findall(r"[a-zA-Z0-9']+", text.lower()) if w not in STOPWORDS and len(w) > 1}
@@ -61,8 +70,12 @@ def retrieve_relevant_entries(question: str, entries: list, top_n: int = 12) -> 
     return top[:top_n]
 
 
-async def ask_ollama(question: str, context_entries: list) -> str:
-    """context_entries: list of (date, plain_text_content) tuples."""
+async def ask_ollama(question: str, context_entries: list, ollama_url: str | None = None) -> str:
+    """context_entries: list of (date, plain_text_content) tuples.
+    ollama_url: per-user override (Settings → Automation → AI Diary Writer
+    → Ollama Server URL); falls back to the OLLAMA_URL environment variable
+    when not set — see _resolve_url below."""
+    url = _resolve_url(ollama_url)
     context_block = "\n\n".join(f"[{date}]\n{text}" for date, text in context_entries) or "(no diary entries found)"
 
     system_prompt = (
@@ -76,7 +89,7 @@ async def ask_ollama(question: str, context_entries: list) -> str:
     try:
         async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
             resp = await client.post(
-                f"{OLLAMA_URL}/api/generate",
+                f"{url}/api/generate",
                 json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
             )
             resp.raise_for_status()
@@ -84,9 +97,9 @@ async def ask_ollama(question: str, context_entries: list) -> str:
             return (data.get("response") or "").strip() or "No answer generated."
     except httpx.RequestError as e:
         return (
-            f"Couldn't reach Ollama at {OLLAMA_URL} ({type(e).__name__}). Make sure Ollama is running "
-            "and reachable from the Headspace backend container (check the OLLAMA_URL environment "
-            "variable in docker-compose.yml)."
+            f"Couldn't reach Ollama at {url} ({type(e).__name__}). Make sure Ollama is running and "
+            "reachable from the Headspace backend container — set it under Settings → Automation → "
+            "AI Diary Writer → Ollama Server URL (or the OLLAMA_URL environment variable)."
         )
     except httpx.HTTPStatusError as e:
         return f"Ollama returned an error ({e.response.status_code}). Is the model '{OLLAMA_MODEL}' pulled?"
@@ -114,27 +127,29 @@ Diary entry:
 JSON array of task titles:"""
 
 
-async def extract_tasks(content: str) -> tuple[list[str], str | None]:
+async def extract_tasks(content: str, ollama_url: str | None = None) -> tuple[list[str], str | None]:
     """Returns (titles, error). error is None when the call succeeded —
     including when the model legitimately found zero tasks, which is a
     real decision, not a failure. error is set only for connectivity/HTTP
     problems or genuinely unparseable output, so callers can tell 'nothing
-    to extract' apart from 'something is actually broken'."""
+    to extract' apart from 'something is actually broken'.
+    ollama_url: per-user override — see _resolve_url below."""
     if not content or not content.strip():
         return [], None
 
+    url = _resolve_url(ollama_url)
     prompt = TASK_EXTRACTION_PROMPT.format(content=content.strip()[:4000])
 
     try:
         async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
             resp = await client.post(
-                f"{OLLAMA_URL}/api/generate",
+                f"{url}/api/generate",
                 json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False, "format": "json"},
             )
             resp.raise_for_status()
             data = resp.json()
     except httpx.RequestError as e:
-        return [], f"Couldn't reach Ollama at {OLLAMA_URL} ({type(e).__name__}). Check OLLAMA_URL in docker-compose.yml."
+        return [], f"Couldn't reach Ollama at {url} ({type(e).__name__}). Set it under Settings → Automation → AI Diary Writer → Ollama Server URL."
     except httpx.HTTPStatusError as e:
         return [], f"Ollama returned an error ({e.response.status_code}). Is the model '{OLLAMA_MODEL}' pulled?"
     except Exception as e:

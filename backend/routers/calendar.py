@@ -327,6 +327,7 @@ async def _event_diary_content(user: User, event: "CalendarEvent", objects: list
         title=event.title or "(untitled event)", description=event.description,
         location=event.location, start_label=start_label, end_label=end_label,
         openai_api_key=user.openai_api_key, anthropic_api_key=user.anthropic_api_key,
+        ollama_url=user.ollama_url,
     )
     if not narrative:
         return _mechanical_event_content(event, objects), False, error
@@ -339,9 +340,16 @@ async def _event_diary_content(user: User, event: "CalendarEvent", objects: list
 
 
 async def import_events_to_diary(db: AsyncSession, user: User, date: str) -> dict:
-    """Imports every not-yet-imported calendar event overlapping `date`
-    (YYYY-MM-DD, interpreted the same way as GET /events/{date}) as a new
-    diary entry. Returns how many entries were created."""
+    """Imports every not-yet-imported, non-all-day calendar event overlapping
+    `date` (YYYY-MM-DD, interpreted the same way as GET /events/{date}) as a
+    new diary entry. Returns how many entries were created.
+
+    All-day events are deliberately skipped here: they already show up as
+    their own banner at the top of the day's calendar events (see
+    CalendarEvents.jsx), so turning one into a diary entry too would just
+    duplicate it — and since an all-day event has no specific time, there's
+    nothing timed to narrate anyway. Only events with an actual start time
+    get turned into entries."""
     try:
         day_start = datetime.strptime(date, "%Y-%m-%d")
     except ValueError:
@@ -351,6 +359,7 @@ async def import_events_to_diary(db: AsyncSession, user: User, date: str) -> dic
     events_r = await db.execute(
         select(CalendarEvent).where(
             CalendarEvent.user_id == user.id,
+            CalendarEvent.all_day == False,
             CalendarEvent.start_time < day_end,
             or_(
                 and_(CalendarEvent.end_time == None, CalendarEvent.start_time >= day_start),
@@ -368,7 +377,12 @@ async def import_events_to_diary(db: AsyncSession, user: User, date: str) -> dic
     )
     already_imported = {row[0] for row in imported_r.all()}
 
-    new_events = [e for e in events if e.uid not in already_imported]
+    # All-day events are skipped entirely — never imported as a diary entry.
+    # They have no real clock time (so every hour of the day would otherwise
+    # get stamped with the same all-day title), and they're already shown at
+    # the top of the day in the Calendar Events widget, so there's nothing
+    # useful a diary entry would add for them.
+    new_events = [e for e in events if e.uid not in already_imported and not e.all_day]
     if not new_events:
         return {"imported": 0, "ai_used": False, "ai_error": None}
 

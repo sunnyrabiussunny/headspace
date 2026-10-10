@@ -31,6 +31,11 @@ class AIConfigUpdate(BaseModel):
     # Each key field: omit to leave unchanged, "" to clear, a value to set.
     openai_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
+    # Per-user Ollama server URL, e.g. http://192.168.10.103:11434 — so each
+    # deployment host can point at its own local Ollama instance instead of
+    # one hardcoded into the image. "" clears it (falls back to the
+    # OLLAMA_URL environment variable).
+    ollama_url: Optional[str] = None
 
 
 @router.get("")
@@ -46,6 +51,7 @@ async def get_settings(current_user: User = Depends(get_current_user)):
         "ai_diary_context": current_user.ai_diary_context or "",
         "has_openai_key": bool(current_user.openai_api_key),
         "has_anthropic_key": bool(current_user.anthropic_api_key),
+        "ollama_url": current_user.ollama_url or "",
     }
 
 
@@ -84,6 +90,8 @@ async def set_ai_config(payload: AIConfigUpdate, current_user: User = Depends(ge
         current_user.openai_api_key = payload.openai_api_key.strip() or None
     if payload.anthropic_api_key is not None:
         current_user.anthropic_api_key = payload.anthropic_api_key.strip() or None
+    if payload.ollama_url is not None:
+        current_user.ollama_url = payload.ollama_url.strip() or None
     await db.commit()
     return {
         "ai_provider": current_user.ai_provider,
@@ -91,6 +99,7 @@ async def set_ai_config(payload: AIConfigUpdate, current_user: User = Depends(ge
         "ai_diary_context": current_user.ai_diary_context or "",
         "has_openai_key": bool(current_user.openai_api_key),
         "has_anthropic_key": bool(current_user.anthropic_api_key),
+        "ollama_url": current_user.ollama_url or "",
     }
 
 
@@ -98,7 +107,7 @@ async def set_ai_config(payload: AIConfigUpdate, current_user: User = Depends(ge
 async def get_ai_models(current_user: User = Depends(get_current_user)):
     """Live-queries each provider so newly installed Ollama models (or a
     freshly-saved API key) show up immediately — nothing here is cached."""
-    ollama_models, ollama_error = await list_ollama_models()
+    ollama_models, ollama_error = await list_ollama_models(current_user.ollama_url)
     openai_models, openai_error = await list_openai_models(current_user.openai_api_key)
     anthropic_models, anthropic_error = await list_anthropic_models(current_user.anthropic_api_key)
     return {

@@ -40,6 +40,7 @@ class User(Base):
     ai_diary_context   = Column(Text, nullable=True)         # free-text personal background fed into the prompt
     openai_api_key     = Column(String, nullable=True)
     anthropic_api_key  = Column(String, nullable=True)
+    ollama_url         = Column(String, nullable=True)       # per-user override, e.g. http://192.168.10.103:11434 — falls back to the OLLAMA_URL env var when unset
 
     # Telegram bot link (Settings → Telegram) — each user connects their own bot
     telegram_bot_token     = Column(String, nullable=True)

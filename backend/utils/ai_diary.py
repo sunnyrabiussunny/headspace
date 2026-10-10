@@ -12,7 +12,7 @@ mechanical format (see calendar.py's _mechanical_event_content).
 import os
 import httpx
 
-from .ollama_client import OLLAMA_URL, OLLAMA_TIMEOUT
+from .ollama_client import OLLAMA_TIMEOUT, _resolve_url
 
 AI_TIMEOUT = float(os.getenv("AI_DIARY_TIMEOUT", "90"))   # local models can be slow
 
@@ -49,8 +49,13 @@ async def generate_diary_narrative(
     end_label: str | None,
     openai_api_key: str | None = None,
     anthropic_api_key: str | None = None,
+    ollama_url: str | None = None,
 ) -> tuple[str | None, str | None]:
-    """Returns (narrative_text, error). error is None on success."""
+    """Returns (narrative_text, error). error is None on success.
+    ollama_url: per-user override (Settings → Automation → AI Diary Writer
+    → Ollama Server URL) — falls back to the OLLAMA_URL environment
+    variable when not set, same resolution as the rest of the Ollama
+    integration (see ollama_client._resolve_url)."""
     if not model:
         return None, "No AI model selected — pick one in Settings → Automation → AI Diary Writer."
 
@@ -62,7 +67,7 @@ async def generate_diary_narrative(
     provider = (provider or "ollama").lower()
     try:
         if provider == "ollama":
-            return await _ollama_narrative(model, prompt)
+            return await _ollama_narrative(model, prompt, ollama_url)
         elif provider == "openai":
             if not openai_api_key:
                 return None, "No OpenAI API key saved in Settings → Automation → AI Diary Writer."
@@ -74,17 +79,19 @@ async def generate_diary_narrative(
         else:
             return None, f"Unknown AI provider '{provider}'."
     except httpx.RequestError as e:
-        return None, f"Couldn't reach {provider} ({type(e).__name__})."
+        url_note = f" at {_resolve_url(ollama_url)}" if provider == "ollama" else ""
+        return None, f"Couldn't reach {provider}{url_note} ({type(e).__name__})."
     except httpx.HTTPStatusError as e:
         return None, f"{provider} returned an error ({e.response.status_code}) — check the model name and API key."
     except Exception as e:
         return None, f"AI diary generation failed: {type(e).__name__}: {e or repr(e)}"
 
 
-async def _ollama_narrative(model: str, prompt: str) -> tuple[str | None, str | None]:
+async def _ollama_narrative(model: str, prompt: str, ollama_url: str | None = None) -> tuple[str | None, str | None]:
+    url = _resolve_url(ollama_url)
     async with httpx.AsyncClient(timeout=AI_TIMEOUT) as client:
         resp = await client.post(
-            f"{OLLAMA_URL}/api/generate",
+            f"{url}/api/generate",
             json={"model": model, "prompt": prompt, "stream": False},
         )
         resp.raise_for_status()
@@ -126,19 +133,22 @@ async def _anthropic_narrative(model: str, prompt: str, api_key: str) -> tuple[s
 
 # ── Model listing (Settings → Automation → AI Diary Writer) ────────────────
 
-async def list_ollama_models() -> tuple[list[str], str | None]:
+async def list_ollama_models(ollama_url: str | None = None) -> tuple[list[str], str | None]:
     """Queries the local Ollama instance for installed models, so a model
     pulled with `ollama pull` shows up here automatically on next load —
-    nothing is hardcoded or cached."""
+    nothing is hardcoded or cached.
+    ollama_url: per-user override (Settings → Automation → AI Diary Writer
+    → Ollama Server URL) — see ollama_client._resolve_url."""
+    url = _resolve_url(ollama_url)
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(f"{OLLAMA_URL}/api/tags")
+            resp = await client.get(f"{url}/api/tags")
             resp.raise_for_status()
             data = resp.json()
         names = sorted({m.get("name") for m in data.get("models", []) if m.get("name")})
         return names, None
     except httpx.RequestError as e:
-        return [], f"Couldn't reach Ollama at {OLLAMA_URL} ({type(e).__name__})."
+        return [], f"Couldn't reach Ollama at {url} ({type(e).__name__})."
     except Exception as e:
         return [], f"Couldn't list Ollama models: {e or repr(e)}"
 

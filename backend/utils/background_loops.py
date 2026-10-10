@@ -99,7 +99,7 @@ async def run_task_scan_pass():
                 ).order_by(DiaryEntry.updated_at.desc()).limit(TASK_SCAN_MAX_PER_PASS)
             )
             for entry in entries_result.scalars().all():
-                titles, error = await extract_tasks(strip_mentions(entry.content))
+                titles, error = await extract_tasks(strip_mentions(entry.content), ollama_url=user.ollama_url)
                 if error:
                     # Leave task_scanned_at unset so this entry gets retried on
                     # a later pass instead of being silently locked out forever
